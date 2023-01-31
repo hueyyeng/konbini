@@ -1,0 +1,2 @@
+class InvalidSgDateFormatException(Exception):
+    pass
