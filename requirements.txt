@@ -1,0 +1,2 @@
+shotgun-api3>=3.3.4
+requests>=2.28.0
