@@ -11,10 +11,11 @@ from urllib3.exceptions import ProtocolError
 
 from konbini.enums import SgEntity, SgHumanUserStatus
 from konbini.exceptions import MissingValueError
+from konbini.logs import KonbiniAdapter
 from konbini.models import SgBooking, SgHumanUser, SgTimeLog
 from konbini.utils import SG_DATE_FORMAT
 
-logger = logging.getLogger(__name__)
+logger = KonbiniAdapter(logging.getLogger(__name__), {})
 logger.setLevel(logging.ERROR)
 
 
@@ -73,7 +74,7 @@ class Konbini:
             #  resulted in this weird exception handling. Refer to https://health.autodesk.com/incidents/d3tbvtvrmq1y
             self.sg = shotgun_api3.Shotgun
             logger.error(e, exc_info=True)
-            logger.error("[Konbini] Highly advisable to verify SG service outages!")
+            logger.error("Highly advisable to verify SG service outages!")
 
     def get_sg_entity_schema_fields(self, entity: str) -> List[str]:
         """Get SG Entity Schema Fields
@@ -245,10 +246,10 @@ class Konbini:
 
         """
         if not isinstance(data, SgHumanUser):
-            raise Exception("[Konbini] Data must be instance of SgHumanUser!")
+            raise Exception("Data must be instance of SgHumanUser!")
 
         if not data.id:
-            raise Exception("[Konbini] No SgHumanUser ID found!")
+            raise Exception("No SgHumanUser ID found!")
 
         is_updated = True
 
@@ -258,9 +259,9 @@ class Konbini:
                 entity_id=data.id,
                 data=data.to_dict(),
             )
-            logger.info(f"[Konbini] Update HumanUser {data.id} successful")
+            logger.info(f"Update HumanUser {data.id} successful")
         except shotgun_api3.ShotgunError as e:
-            logger.error(f"[Konbini] Error updating HumanUser {data.id}: {e}")
+            logger.error(f"Error updating HumanUser {data.id}: {e}")
             is_updated = False
 
         return is_updated
@@ -920,10 +921,10 @@ class Konbini:
 
         """
         if not isinstance(data, SgTimeLog):
-            raise Exception("[Konbini] Data must be instance of SgTimeLog!")
+            raise Exception("Data must be instance of SgTimeLog!")
 
         if not data.id:
-            raise Exception("[Konbini] No SgTimeLog ID found!")
+            raise Exception("No SgTimeLog ID found!")
 
         is_successful_update = True
         try:
@@ -932,9 +933,9 @@ class Konbini:
                 entity_id=data.id,
                 data=data.to_dict(),
             )
-            logger.info(f"[Konbini] Update Timelog {data.id} successful")
+            logger.info(f"Update Timelog {data.id} successful")
         except shotgun_api3.ShotgunError as e:
-            logger.warning(f"[Konbini] Error updating Timelog {data.id}: {e}")
+            logger.warning(f"Error updating Timelog {data.id}: {e}")
             is_successful_update = False
 
         return is_successful_update
@@ -958,7 +959,7 @@ class Konbini:
         try:
             is_deleted = self.sg.delete(SgEntity.TIMELOG, sg_timelog_id)
         except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
-            logger.warning(f"[Konbini] Error deleting Timelog {sg_timelog_id}: {e}")
+            logger.warning(f"Error deleting Timelog {sg_timelog_id}: {e}")
             is_deleted = False
 
         return is_deleted
@@ -995,7 +996,7 @@ class Konbini:
         except Exception as e:
             logger.error(
                 {
-                    "msg": "[Konbini] Unexpected error in bulk deleting timelog",
+                    "msg": " Unexpected error in bulk deleting timelog",
                     "error": e,
                     "task ids": sg_timelog_ids,
                 }
