@@ -7,6 +7,13 @@ from konbini.enums import SgEntity
 from konbini.exceptions import InvalidSgDateFormatException
 from konbini.utils import SG_DATE_FORMAT, validate_sg_date_format
 
+# TODO: Use Python 3.10+ kw_only but that is another headache for maintenance...
+
+
+@dataclass
+class SgIdMixin:
+    id: int = 0
+
 
 @dataclass
 class SgBaseModel:
@@ -43,37 +50,37 @@ class SgBaseModel:
 
 
 @dataclass
-class SgGenericEntity(SgBaseModel):
-    id: int = 0
+class SgGenericEntity(SgIdMixin, SgBaseModel):
     name: str = ""
     type: str = ""
 
 
 @dataclass
-class SgNote(SgBaseModel):
-    id: int
-    name: str
+class SgNote(SgIdMixin, SgBaseModel):
+    name: str = ""
     type: str = SgEntity.NOTE
 
 
 @dataclass
-class SgProject(SgBaseModel):
-    id: int
+class SgProject(SgIdMixin, SgBaseModel):
     name: str = ""
     type: str = SgEntity.PROJECT
 
 
 @dataclass
-class SgPipelineStep(SgBaseModel):
-    id: int
+class _SgPipelineStep(SgBaseModel):
     code: str  # The nice name (e.g. Model)
     short_name: str  # Self explanatory (e.g. MOD)
     type: str = SgEntity.STEP
 
 
 @dataclass
-class SgVersion(SgBaseModel):
-    id: int
+class SgPipelineStep(SgIdMixin, _SgPipelineStep):
+    pass
+
+
+@dataclass
+class _SgVersion(SgBaseModel):
     code: str  # Version Name
     entity: Optional[dict] = None  # Link
     notes: List[SgNote] = field(default_factory=list)
@@ -101,26 +108,38 @@ class SgVersion(SgBaseModel):
 
 
 @dataclass
-class SgShot(SgBaseModel):
-    id: int
+class SgVersion(SgIdMixin, _SgVersion):
+    pass
+
+
+@dataclass
+class _SgShot(SgBaseModel):
     code: str  # Shot Code
     type: str = SgEntity.SHOT
 
 
 @dataclass
-class SgTask(SgBaseModel):
+class SgShot(SgIdMixin, _SgShot):
+    pass
+
+
+@dataclass
+class _SgTask(SgBaseModel):
     name: str
     short_name: str = ""
     content: str = ""
-    id: int = 0
     entity: Optional[SgGenericEntity] = None
     project: Optional[SgProject] = None
     type: str = SgEntity.TASK
 
 
 @dataclass
-class SgAsset(SgBaseModel):
-    id: int
+class SgTask(SgIdMixin, _SgTask):
+    pass
+
+
+@dataclass
+class _SgAsset(SgBaseModel):
     code: str  # Shot Code
     tasks: List[SgTask] = field(default_factory=list)
     type: str = SgEntity.ASSET
@@ -148,8 +167,12 @@ class SgAsset(SgBaseModel):
 
 
 @dataclass
-class SgPlaylist(SgBaseModel):
-    id: int
+class SgAsset(SgIdMixin, _SgAsset):
+    pass
+
+
+@dataclass
+class _SgPlaylist(SgBaseModel):
     code: str  # Playlist name
     description: str = ""
     versions: List[SgVersion] = field(default_factory=list)
@@ -175,8 +198,12 @@ class SgPlaylist(SgBaseModel):
 
 
 @dataclass
-class SgHumanUser(SgBaseModel):
-    id: Optional[int] = None
+class SgPlaylist(SgIdMixin, _SgPlaylist):
+    pass
+
+
+@dataclass
+class _SgHumanUser(SgBaseModel):
     name: str = ""
     type: str = SgEntity.HUMANUSER
     projects: Optional[List[dict]] = None
@@ -193,12 +220,16 @@ class SgHumanUser(SgBaseModel):
 
 
 @dataclass
-class SgBooking(SgBaseModel):
+class SgHumanUser(SgIdMixin, _SgHumanUser):
+    pass
+
+
+@dataclass
+class _SgBooking(SgBaseModel):
     user: SgHumanUser
     start_date: str
     end_date: str
     vacation: bool = True
-    id: Optional[int] = None
     note: str = ""
     type: str = SgEntity.BOOKING
 
@@ -229,14 +260,18 @@ class SgBooking(SgBaseModel):
 
 
 @dataclass
-class SgTimeLog(SgBaseModel):
+class SgBooking(SgIdMixin, _SgBooking):
+    pass
+
+
+@dataclass
+class _SgTimeLog(SgBaseModel):
     date: str
     description: str = ""
     duration: float = 0.0
     entity: Optional[SgGenericEntity] = None
     project: Optional[SgProject] = None
     user: Optional[SgHumanUser] = None
-    id: Optional[int] = None
     type: str = SgEntity.TIMELOG
 
     @classmethod
@@ -272,3 +307,8 @@ class SgTimeLog(SgBaseModel):
     def get_date(self) -> datetime.date:
         timelog_date = datetime.datetime.strptime(self.date, SG_DATE_FORMAT).date()
         return timelog_date
+
+
+@dataclass
+class SgTimeLog(SgIdMixin, _SgTimeLog):
+    pass
