@@ -12,7 +12,7 @@ EXCLUDE_FOLDERS = [
     "tests",
 ]
 
-with open(str(PROJECT_ROOT / "README.md"), "r") as readme:
+with open(str(PROJECT_ROOT / "README.md"), "r", encoding="utf-8") as readme:
     README = readme.read()
 
 with open(str(PROJECT_ROOT / "requirements.txt"), "r") as req:
