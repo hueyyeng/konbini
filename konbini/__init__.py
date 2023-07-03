@@ -3,22 +3,54 @@ __version__ = "0.1.0"
 import calendar
 import datetime
 import logging
+import os
 from typing import List, Optional, Set, Union
 
 import shotgun_api3
-from konbini.enums import SgEntity, SgHumanUserStatus
-from konbini.models import SgBooking, SgHumanUser, SgTimeLog
-from konbini.utils import SG_DATE_FORMAT
 from urllib3.exceptions import ProtocolError
 
-logger = logging.getLogger(__name__)
+from konbini.enums import SgEntity, SgHumanUserStatus
+from konbini.exceptions import MissingValueError
+from konbini.logs import KonbiniAdapter
+from konbini.models import SgBooking, SgHumanUser, SgTimeLog
+from konbini.utils import SG_DATE_FORMAT
+
+logger = KonbiniAdapter(logging.getLogger(__name__), {})
 logger.setLevel(logging.ERROR)
 
 
 class Konbini:
-    DISABLE_SSL_VALIDATION = False
+    NO_SSL_VALIDATION = False
 
-    def __init__(self, base_url: str, script_name: str, api_key: str):
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        script_name: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ):
+        # Higher precedence for params value
+        if not base_url:
+            base_url = os.environ.get("KONBINI_BASE_URL", default="")
+
+        if not script_name:
+            script_name = os.environ.get("KONBINI_SCRIPT_NAME", default="")
+
+        if not api_key:
+            api_key = os.environ.get("KONBINI_API_KEY", default="")
+
+        # Verify values exists from either params or env
+        if not base_url:
+            raise MissingValueError("base_url")
+
+        if not script_name:
+            raise MissingValueError("script_name")
+
+        if not api_key:
+            raise MissingValueError("api_key")
+        
+        # Override shotgun NO_SSL_VALIDATION value
+        shotgun_api3.shotgun.NO_SSL_VALIDATION = self.NO_SSL_VALIDATION
+
         self.connect(
             base_url,
             script_name,
@@ -26,10 +58,10 @@ class Konbini:
         )
 
     def connect(
-            self,
-            base_url: str,
-            script_name: str,
-            api_key: str,
+        self,
+        base_url: str,
+        script_name: str,
+        api_key: str,
     ):
         try:
             self.sg = shotgun_api3.Shotgun(
@@ -38,11 +70,11 @@ class Konbini:
                 api_key,
             )
         except (ProtocolError, Exception) as e:
-            # TODO: Handle this gracefully? The SG outage back in 2023-01-09 breaks BADLY and
-            #  resulted in this weird exception handling
+            # TODO: Handle this gracefully? The SG outage back in 2023-01-04 (UTC) breaks BADLY and
+            #  resulted in this weird exception handling. Refer to https://health.autodesk.com/incidents/d3tbvtvrmq1y
             self.sg = shotgun_api3.Shotgun
             logger.error(e, exc_info=True)
-            logger.error("[Konbini] Highly advisable to verify SG service outages!")
+            logger.error("Highly advisable to verify SG service outages!")
 
     def get_sg_entity_schema_fields(self, entity: str) -> List[str]:
         """Get SG Entity Schema Fields
@@ -71,14 +103,14 @@ class Konbini:
         Parameters
         ----------
         humanuser_id : int
-            Shotgun/ShotGrid HumanUser ID. Default None which retrieve all valid HumanUser
+            ShotGrid HumanUser ID. Default None which retrieve all valid HumanUser
         custom_fields : list[str]
             List of custom fields
 
         Returns
         -------
         list
-            List of SgHumanUser or empty list if no results from Shotgun/ShotGrid
+            List of SgHumanUser or empty list if no results from ShotGrid
 
         """
         filters = []
@@ -124,7 +156,7 @@ class Konbini:
         Returns
         -------
         list[SgHumanUser]
-            List of SgHumanUser or empty list if no results from Shotgun/ShotGrid
+            List of SgHumanUser or empty list if no results from ShotGrid
 
         """
         filters = [
@@ -214,10 +246,10 @@ class Konbini:
 
         """
         if not isinstance(data, SgHumanUser):
-            raise Exception("[SG] Data must be instance of SgHumanUser!")
+            raise Exception("Data must be instance of SgHumanUser!")
 
         if not data.id:
-            raise Exception("[SG] No SgHumanUser ID found!")
+            raise Exception("No SgHumanUser ID found!")
 
         is_updated = True
 
@@ -227,9 +259,9 @@ class Konbini:
                 entity_id=data.id,
                 data=data.to_dict(),
             )
-            logger.info(f"[SG] Update HumanUser {data.id} successful")
+            logger.info(f"Update HumanUser {data.id} successful")
         except shotgun_api3.ShotgunError as e:
-            logger.error(f"[SG] Error updating HumanUser {data.id}: {e}")
+            logger.error(f"Error updating HumanUser {data.id}: {e}")
             is_updated = False
 
         return is_updated
@@ -244,7 +276,7 @@ class Konbini:
         Parameters
         ----------
         humanuser_id : int
-            Shotgun/ShotGrid HumanUser ID. Default None which retrieve all
+            ShotGrid HumanUser ID. Default None which retrieve all
             bookings for every valid HumanUser
         custom_fields: list[str]
             List of custom fields
@@ -252,7 +284,7 @@ class Konbini:
         Returns
         -------
         list[SgBooking]
-            List of SgBooking or empty list if no results from Shotgun/ShotGrid
+            List of SgBooking or empty list if no results from ShotGrid
 
         """
         filters = []
@@ -303,7 +335,7 @@ class Konbini:
         year : int
             Calendar year
         humanuser_id : int
-            Shotgun/ShotGrid HumanUser ID. Default None which retrieve all
+            ShotGrid HumanUser ID. Default None which retrieve all
             bookings for every valid HumanUser
         custom_fields: list[str]
             List of custom fields
@@ -311,7 +343,7 @@ class Konbini:
         Returns
         -------
         list[SgBooking]
-            List of SgBooking or empty list if no results from Shotgun/ShotGrid
+            List of SgBooking or empty list if no results from ShotGrid
         
         """
         current_dt = datetime.datetime.now()
@@ -385,7 +417,7 @@ class Konbini:
         year : int
             Calendar year
         humanuser_id : int
-            Shotgun/ShotGrid HumanUser ID. Default None which retrieve all
+            ShotGrid HumanUser ID. Default None which retrieve all
             bookings for every valid HumanUser
         custom_fields: list[str]
             List of custom fields
@@ -393,7 +425,7 @@ class Konbini:
         Returns
         -------
         list[SgBooking]
-            List of SgBooking or empty list if no results from Shotgun/ShotGrid
+            List of SgBooking or empty list if no results from ShotGrid
 
         """
         current_dt = datetime.datetime.now()
@@ -575,12 +607,12 @@ class Konbini:
         Parameters
         ----------
         project_id : int
-            Shotgun/ShotGrid Project ID.
+            ShotGrid Project ID.
         
         Returns
         -------
         list[dict]
-            List of dict or empty list if no results from Shotgun/ShotGrid
+            List of dict or empty list if no results from ShotGrid
         
         """
         filters = [
@@ -604,24 +636,24 @@ class Konbini:
         notes = self.sg.find(SgEntity.NOTE, filters, fields)
         return notes
 
-    def get_sg_shot_notes(
+    def get_sg_shots(
             self,
             project_id: int,
             custom_fields: Optional[List[str]] = None,
     ) -> List[dict]:
-        """Get SG Shot Notes
+        """Get SG Shots
         
         Parameters
         ----------
         project_id : int
-            Shotgun/ShotGrid Project ID.
+            ShotGrid Project ID.
         custom_fields: list[str]
             List of custom fields
         
         Returns
         -------
         list[dict]
-            List of dict or empty list if no results from Shotgun/ShotGrid
+            List of dict or empty list if no results from ShotGrid
             
         """
         filters = [
@@ -657,12 +689,12 @@ class Konbini:
         ----------
         custom_fields: list[str]
         tasks_id : int | set[int] | list[int]
-            Shotgun/ShotGrid Task ID.
+            ShotGrid Task ID.
 
         Returns
         -------
         list
-            List of dict or empty list if no results from Shotgun/ShotGrid
+            List of dict or empty list if no results from ShotGrid
 
         Notes
         -----
@@ -889,10 +921,10 @@ class Konbini:
 
         """
         if not isinstance(data, SgTimeLog):
-            raise Exception("[SG] Data must be instance of SgTimeLog!")
+            raise Exception("Data must be instance of SgTimeLog!")
 
         if not data.id:
-            raise Exception("[SG] No SgTimeLog ID found!")
+            raise Exception("No SgTimeLog ID found!")
 
         is_successful_update = True
         try:
@@ -901,9 +933,9 @@ class Konbini:
                 entity_id=data.id,
                 data=data.to_dict(),
             )
-            logger.info(f"[SG] Update Timelog {data.id} successful")
+            logger.info(f"Update Timelog {data.id} successful")
         except shotgun_api3.ShotgunError as e:
-            logger.warning(f"[SG] Error updating Timelog {data.id}: {e}")
+            logger.warning(f"Error updating Timelog {data.id}: {e}")
             is_successful_update = False
 
         return is_successful_update
@@ -927,7 +959,7 @@ class Konbini:
         try:
             is_deleted = self.sg.delete(SgEntity.TIMELOG, sg_timelog_id)
         except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
-            logger.warning(f"[SG] Error deleting Timelog {sg_timelog_id}: {e}")
+            logger.warning(f"Error deleting Timelog {sg_timelog_id}: {e}")
             is_deleted = False
 
         return is_deleted
@@ -964,7 +996,7 @@ class Konbini:
         except Exception as e:
             logger.error(
                 {
-                    "msg": "[SG] Unexpected error in bulk deleting timelog",
+                    "msg": " Unexpected error in bulk deleting timelog",
                     "error": e,
                     "task ids": sg_timelog_ids,
                 }
