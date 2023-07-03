@@ -636,12 +636,12 @@ class Konbini:
         notes = self.sg.find(SgEntity.NOTE, filters, fields)
         return notes
 
-    def get_sg_shot_notes(
+    def get_sg_shots(
             self,
             project_id: int,
             custom_fields: Optional[List[str]] = None,
     ) -> List[dict]:
-        """Get SG Shot Notes
+        """Get SG Shots
         
         Parameters
         ----------
