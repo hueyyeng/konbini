@@ -1,0 +1,51 @@
+[project]
+name = "Konbini"
+description = "Opinionated Autodesk Shotgun/ShotGrid API Wrapper."
+readme = "README.md"
+requires-python = ">=3.7"
+license = "LICENSE"
+keywords = [
+    "python",
+    "library",
+    "shotgrid",
+    "shotgun",
+    "api",
+    "autodesk",
+]
+authors = [
+    {name = "Huey Yeng", email = "huey.yeng.mmu@gmail.com"}
+]
+maintainers = [
+    {name = "Huey Yeng", email = "huey.yeng.mmu@gmail.com"}
+]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.7",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+]
+dynamic = [
+    "version",
+    "dependencies",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/hueyyeng/konbini"
+"Bug Reports" = "https://github.com/hueyyeng/konbini/issues"
+"Source" = "https://github.com/hueyyeng/konbini"
+
+[build-system]
+requires = ["setuptools >= 61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["konbini"]
+
+[tool.setuptools.dynamic]
+version = {attr = "konbini.__version__"}
+dependencies = {file = "requirements.txt", content-type = "text/plain"}
