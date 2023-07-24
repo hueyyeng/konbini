@@ -40,11 +40,8 @@ dynamic = [
 "Source" = "https://github.com/hueyyeng/konbini"
 
 [build-system]
-requires = ["setuptools >= 61.0.0"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-where = ["konbinine"]
 
 [tool.setuptools.dynamic]
 version = {attr = "konbinine.__version__"}
