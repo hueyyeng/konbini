@@ -10,10 +10,10 @@ because the API usage requirements is 便利じゃないでしょう？
 
 ## How to Use
 
-> For Python 3.7 and newer! While Autodesk made **shotgun_api3** to be compatible with Python 2 and 3, **konbini**
+> For Python 3.7 and newer! While Autodesk made **shotgun_api3** to be compatible with Python 2 and 3, **konbinine**
 > uses `dataclass` that is only available in Python 3.7 onwards.
 
-**konbini** is designed to be use with web framework (such as Django, Flask, etc) that interacts with ShotGrid. This
+**konbinine** is designed to be use with web framework (such as Django, Flask, etc) that interacts with ShotGrid. This
 library has not been tested inside Digital Content Creation (DCC) software such as Maya, 3ds Max or Houdini.
 
 Technically it should just work but that is outside the scope of this library.
@@ -26,7 +26,7 @@ Technically it should just work but that is outside the scope of this library.
 
 ### Existing Project that Uses shotgun_api3
 
-You will need to... rewrite/refactor your code to use **konbini**! Pretty much the main reason why **konbini** was
+You will need to... rewrite/refactor your code to use **konbinine**! Pretty much the main reason why **konbinine** was
 created is to improve the Developer Experience (DX) when interacting with ShotGrid.
 
 ## Quickstart for Developers
@@ -35,6 +35,6 @@ created is to improve the Developer Experience (DX) when interacting with ShotGr
 pip install -r requirements.txt
 ```
 
-## Extending konbini
+## Extending konbinine
 
 Coming soon!

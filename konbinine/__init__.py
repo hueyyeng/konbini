@@ -1,4 +1,4 @@
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 import calendar
 import datetime
@@ -9,11 +9,11 @@ from typing import List, Optional, Set, Union
 import shotgun_api3
 from urllib3.exceptions import ProtocolError
 
-from konbini.enums import SgEntity, SgHumanUserStatus
-from konbini.exceptions import MissingValueError
-from konbini.logs import KonbiniAdapter
-from konbini.models import SgBooking, SgHumanUser, SgTimeLog
-from konbini.utils import SG_DATE_FORMAT
+from konbinine.enums import SgEntity, SgHumanUserStatus
+from konbinine.exceptions import MissingValueError
+from konbinine.logs import KonbiniAdapter
+from konbinine.models import SgBooking, SgHumanUser, SgTimeLog
+from konbinine.utils import SG_DATE_FORMAT
 
 logger = KonbiniAdapter(logging.getLogger(__name__), {})
 logger.setLevel(logging.ERROR)

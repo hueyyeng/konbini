@@ -3,9 +3,9 @@ import inspect
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
-from konbini.enums import SgEntity
-from konbini.exceptions import InvalidSgDateFormatException
-from konbini.utils import SG_DATE_FORMAT, validate_sg_date_format
+from konbinine.enums import SgEntity
+from konbinine.exceptions import InvalidSgDateFormatException
+from konbinine.utils import SG_DATE_FORMAT, validate_sg_date_format
 
 # TODO: Use Python 3.10+ kw_only but that is another headache for maintenance...
 

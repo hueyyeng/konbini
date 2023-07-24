@@ -2,9 +2,9 @@ from pathlib import Path
 
 from setuptools import find_packages, setup
 
-from konbini import __version__ as version
+from konbinine import __version__ as version
 
-PROJECT_NAME = "konbini"
+PROJECT_NAME = "konbinine"
 PROJECT_ROOT = Path(__file__).parent
 EXCLUDE_FOLDERS = [
     "docs",
