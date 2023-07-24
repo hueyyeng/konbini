@@ -1,9 +1,9 @@
 [project]
-name = "Konbini"
+name = "konbinine"
 description = "Opinionated Autodesk Shotgun/ShotGrid API Wrapper."
 readme = "README.md"
 requires-python = ">=3.7"
-license = "LICENSE"
+license = {file = "LICENSE"}
 keywords = [
     "python",
     "library",
@@ -48,4 +48,4 @@ where = ["konbini"]
 
 [tool.setuptools.dynamic]
 version = {attr = "konbini.__version__"}
-dependencies = {file = "requirements.txt", content-type = "text/plain"}
+dependencies = {file = "requirements.txt"}
