@@ -20,9 +20,34 @@ Technically it should just work but that is outside the scope of this library.
 
 ### New Project
 
+#### First time setup
+
 1. Add `konbinine` to your project's `requirements.txt`.
 2. ???
 3. Profit (in improving code readability and debugging)
+
+#### Using konbinine
+
+I recommend configuring the environment variables before running the following code.
+
+Set it using your `.env` file or through the shell session etc.
+
+```shell
+# if your studio subscribed to Shotgun prior to the ShotGrid rename, the URL should
+# looks like https://yourstudioname.shotgunstudio.com or something 
+KONBINI_BASE_URL=https://yourstudioname.shotgrid.autodesk.com
+KONBINI_SCRIPT_NAME=YOURSHOTGRIDAPISCRIPTNAMEHERE
+KONBINI_API_KEY=YOURSHOTGRIDAPIKEYHERE
+```
+
+```python
+from konbinine import Konbini
+from konbinine.enums import SgEntity
+
+kon = Konbini()
+booking_schemas = kon.get_sg_entity_schema_fields(SgEntity.BOOKING)
+# whatever booking schemas results here
+```
 
 ### Existing Project that Uses shotgun_api3
 
