@@ -4,8 +4,14 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
 from konbinine.enums import SgEntity
-from konbinine.exceptions import InvalidSgDateFormatException
-from konbinine.utils import SG_DATE_FORMAT, validate_sg_date_format
+from konbinine.exceptions import (
+    InvalidSgDateFormatException,
+)
+from konbinine.utils import (
+    get_current_utc_dt,
+    SG_DATE_FORMAT,
+    validate_sg_date_format,
+)
 
 # TODO: Use Python 3.10+ kw_only but that is another headache for maintenance...
 
@@ -65,12 +71,26 @@ class SgNote(SgIdMixin, SgBaseModel):
 class SgProject(SgIdMixin, SgBaseModel):
     name: str = ""
     type: str = SgEntity.PROJECT
+    archived: bool = False
+    code: Optional[str] = None
+    sg_description: Optional[str] = None
+    sg_status: Optional[str] = None
+    sg_type: Optional[str] = None
+    start_date: Optional[str] = None  # Date uses YYYY-MM-DD format
+    end_date: Optional[str] = None
+    updated_at: Optional[datetime.datetime] = None  # Example 2023-08-07T06:29:35Z
+    image: Optional[str] = None
+    duration: Optional[int] = None  # Number of days
+
+    def validate_stale_data(self) -> bool:
+        current_dt = get_current_utc_dt()
+        return self.updated_at > current_dt
 
 
 @dataclass
 class _SgPipelineStep(SgBaseModel):
     code: str  # The nice name (e.g. Model)
-    short_name: str  # Self explanatory (e.g. MOD)
+    short_name: str  # Self-explanatory (e.g. MOD)
     type: str = SgEntity.STEP
 
 
@@ -204,8 +224,14 @@ class SgPlaylist(SgIdMixin, _SgPlaylist):
 
 @dataclass
 class _SgHumanUser(SgBaseModel):
+    login: str
     name: str = ""
+    firstname: str = ""
+    lastname: str = ""
+    email: str = ""
+    file_access: bool = False
     type: str = SgEntity.HUMANUSER
+    image: Optional[str] = None
     projects: Optional[List[dict]] = None
     groups: Optional[List[dict]] = None
 
