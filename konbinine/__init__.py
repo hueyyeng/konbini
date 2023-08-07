@@ -1,4 +1,4 @@
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 import calendar
 import datetime
@@ -11,8 +11,17 @@ from urllib3.exceptions import ProtocolError
 
 from konbinine.enums import SgEntity, SgHumanUserStatus
 from konbinine.exceptions import MissingValueError
+from konbinine.fields import (
+    HUMANUSER_FIELDS,
+    PROJECT_FIELDS,
+)
 from konbinine.logs import KonbiniAdapter
-from konbinine.models import SgBooking, SgHumanUser, SgTimeLog
+from konbinine.models import (
+    SgBooking,
+    SgHumanUser,
+    SgProject,
+    SgTimeLog,
+)
 from konbinine.utils import SG_DATE_FORMAT
 
 logger = KonbiniAdapter(logging.getLogger(__name__), {})
@@ -93,6 +102,93 @@ class Konbini:
         fields = self.sg.schema_field_read(entity_type=entity)
         return list(fields.keys())
 
+    def get_sg_projects(
+            self,
+            project_id: Optional[int] = None,
+            custom_fields: Optional[List[str]] = None,
+    ) -> List[SgProject]:
+        """Get SG Projects
+
+        Parameters
+        ----------
+        project_id : int
+            ShotGrid Project ID. Default None which retrieve all Projects
+        custom_fields : list[str]
+            List of custom fields
+
+        Returns
+        -------
+        list of SgProject
+            List of SgProject or empty list if no results from ShotGrid
+
+        """
+        filters = []
+        if project_id:
+            filters = [
+                [
+                    "id",
+                    "is",
+                    project_id
+                ]
+            ]
+
+        fields = PROJECT_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        _projects: List[dict] = self.sg.find(SgEntity.PROJECT, filters, fields)
+        if not _projects:
+            return []
+
+        projects = []
+        for project in _projects:
+            sg_project = SgProject.from_dict(project)
+            projects.append(sg_project)
+
+        return projects
+
+    def update_sg_project(self, data: SgProject) -> bool:
+        """Update SG Project
+
+        Parameters
+        ----------
+        data : SgProject
+            The SgProject data for update
+
+        Returns
+        -------
+        bool
+            True if update successfully
+
+        """
+        if not isinstance(data, SgProject):
+            raise Exception("Data must be instance of SgProject!")
+
+        if not data.id:
+            raise Exception("No SgProject ID found!")
+
+        is_updated = True
+        data_ = data.to_dict()
+
+        # Project start and end date is read only (only can be modified using Project Planning app on SG Web)
+        data_.pop("start_date", None)
+        data_.pop("end_date", None)
+        data_.pop("duration", None)
+        data_.pop("updated_at", None)
+
+        try:
+            self.sg.update(
+                entity_type=SgEntity.PROJECT,
+                entity_id=data.id,
+                data=data_,
+            )
+            logger.info(f"Update SgProject {data.id} successful")
+        except shotgun_api3.ShotgunError as e:
+            logger.error(f"Error updating SgProject {data.id}: {e}")
+            is_updated = False
+
+        return is_updated
+
     def get_sg_humanusers(
             self,
             humanuser_id: Optional[int] = None,
@@ -123,11 +219,7 @@ class Konbini:
                 ]
             ]
 
-        fields = [
-            "name",
-            "projects",
-            "groups",
-        ]
+        fields = HUMANUSER_FIELDS
         if custom_fields:
             fields = custom_fields
 
@@ -167,10 +259,7 @@ class Konbini:
             ]
         ]
 
-        fields = [
-            "name",
-            "groups",
-        ]
+        fields = HUMANUSER_FIELDS
         if custom_fields:
             fields = custom_fields
 
@@ -252,12 +341,18 @@ class Konbini:
             raise Exception("No SgHumanUser ID found!")
 
         is_updated = True
+        data_ = data.to_dict()
+
+        # Requires Autodesk Account Portal to update the following fields
+        data_.pop("email", None)
+        data_.pop("firstname", None)
+        data_.pop("lastname", None)
 
         try:
             self.sg.update(
                 entity_type=SgEntity.HUMANUSER,
                 entity_id=data.id,
-                data=data.to_dict(),
+                data=data_,
             )
             logger.info(f"Update HumanUser {data.id} successful")
         except shotgun_api3.ShotgunError as e:
