@@ -4,7 +4,7 @@ import calendar
 import datetime
 import logging
 import os
-from typing import List, Optional, Set, Union
+from typing import List, Optional, Set, Tuple, Union
 
 import shotgun_api3
 from urllib3.exceptions import ProtocolError
@@ -102,6 +102,29 @@ class Konbini:
         fields = self.sg.schema_field_read(entity_type=entity)
         return list(fields.keys())
 
+    def get_valid_values(self, entity: str, field_name: str) -> List[str]:
+        """Get Valid Values
+
+        Parameters
+        ----------
+        entity : str
+            The entity type (e.g. Asset, Shot, Timelog, etc)
+        field_name : str
+            The field name (e.g. sg_status, sg_status_list, etc)
+
+        Returns
+        -------
+        list of str
+
+        """
+        response_data = self.sg.schema_field_read(entity, field_name)
+        try:
+            valid_values: List[str] = response_data[field_name]["properties"]["valid_values"]["value"]
+        except (KeyError, Exception) as e:
+            raise e
+
+        return valid_values
+
     def get_sg_projects(
             self,
             project_id: Optional[int] = None,
@@ -147,6 +170,44 @@ class Konbini:
 
         return projects
 
+    def create_sg_project(self, data: SgProject) -> Tuple[int, bool]:
+        if not isinstance(data, SgProject):
+            raise Exception("Data must be instance of SgProject!")
+
+        create_data = {
+            "name": data.name,
+            "sg_description": data.sg_description,
+        }
+        if data.sg_status:
+            valid_values = self.get_valid_values(SgEntity.PROJECT, "sg_status")
+            if data.sg_status not in valid_values:
+                raise Exception(f"Invalid {data.sg_status} value! Valid values: {valid_values}")
+
+            create_data["sg_status"] = data.sg_status
+
+        # Make sure it is str, bytes or os.PathLike object
+        if data.image_upload:
+            create_data["image"] = data.image_upload,
+
+        is_created = True
+        sg_id = 0
+
+        try:
+            response_data = self.sg.create(
+                entity_type=SgEntity.PROJECT,
+                data=create_data,
+            )
+            sg_id = response_data["id"]
+            logger.info(f"SgProject {response_data['id']} successfully created")
+        except shotgun_api3.ShotgunError as e:
+            logger.error(f"Error creating SgProject for Project {data.name}: {e}")
+            is_created = False
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgProject {data.name}: {e}")
+            is_created = False
+
+        return sg_id, is_created
+
     def update_sg_project(self, data: SgProject) -> bool:
         """Update SG Project
 
@@ -167,6 +228,11 @@ class Konbini:
         if not data.id:
             raise Exception("No SgProject ID found!")
 
+        if data.sg_status:
+            valid_values = self.get_valid_values(SgEntity.PROJECT, "sg_status")
+            if data.sg_status not in valid_values:
+                raise Exception(f"Invalid {data.sg_status} value! Valid values: {valid_values}")
+
         is_updated = True
         data_ = data.to_dict()
 
@@ -175,6 +241,12 @@ class Konbini:
         data_.pop("end_date", None)
         data_.pop("duration", None)
         data_.pop("updated_at", None)
+        data_.pop("image", None)
+
+        # Make sure it is str, bytes or os.PathLike object
+        is_image_upload = data_.pop("image_upload", None)
+        if is_image_upload:
+            data_["image"] = is_image_upload
 
         try:
             self.sg.update(
@@ -185,6 +257,9 @@ class Konbini:
             logger.info(f"Update SgProject {data.id} successful")
         except shotgun_api3.ShotgunError as e:
             logger.error(f"Error updating SgProject {data.id}: {e}")
+            is_updated = False
+        except Exception as e:
+            logger.error(f"Unhandled exception when updating SgProject {data.id}: {e}")
             is_updated = False
 
         return is_updated

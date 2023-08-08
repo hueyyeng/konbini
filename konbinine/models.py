@@ -79,7 +79,8 @@ class SgProject(SgIdMixin, SgBaseModel):
     start_date: Optional[str] = None  # Date uses YYYY-MM-DD format
     end_date: Optional[str] = None
     updated_at: Optional[datetime.datetime] = None  # Example 2023-08-07T06:29:35Z
-    image: Optional[str] = None
+    image: Optional[str] = None  # When retrieve from SG API, should be the URL path
+    image_upload: Optional[str] = None  # For uploading to SG (str, bytes or os.PathLike object)
     duration: Optional[int] = None  # Number of days
 
     def validate_stale_data(self) -> bool:
