@@ -10,10 +10,11 @@ because the API usage requirements is 便利じゃないでしょう？
 
 ## How to Use
 
-> For Python 3.7 and newer! While Autodesk made **shotgun_api3** to be compatible with Python 2 and 3, **konbinine**
-> uses `dataclass` that is only available in Python 3.7 onwards.
+> For Python 3.8 and newer! While Autodesk made **shotgun_api3** to be compatible with Python 2 and 3, **konbinine**
+> uses `dataclass` that is only available in Python 3.7 onwards. Starting with v0.1.6, Python 3.8 will be the minimum
+> version due to the usage of TypedDict.
 
-**konbinine** is designed to be use with web framework (such as Django, Flask, etc) that interacts with ShotGrid. This
+**konbinine** is designed to be used with web framework (such as Django, Flask, etc.) that interacts with ShotGrid. This
 library has not been tested inside Digital Content Creation (DCC) software such as Maya, 3ds Max or Houdini.
 
 Technically it should just work but that is outside the scope of this library.
@@ -63,3 +64,8 @@ pip install -r requirements.txt
 ## Extending konbinine
 
 Coming soon!
+
+## TODO
+
+1. Implement `Sequence` dataclass
+2. Handle Image/Movie upload gracefully (currently for Project entity only)
