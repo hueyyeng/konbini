@@ -7,6 +7,7 @@ from konbinine.enums import SgEntity
 from konbinine.exceptions import (
     InvalidSgDateFormatException,
 )
+from konbinine.types import TSgUploadedMovie
 from konbinine.utils import (
     get_current_utc_dt,
     SG_DATE_FORMAT,
@@ -63,8 +64,29 @@ class SgGenericEntity(SgIdMixin, SgBaseModel):
 
 @dataclass
 class SgNote(SgIdMixin, SgBaseModel):
-    name: str = ""
+    subject: str = ""
+    content: str = ""
+    sg_status_list: str = ""
+    note_links: list[SgGenericEntity] = field(default_factory=list)
     type: str = SgEntity.NOTE
+
+    @classmethod
+    def from_dict(cls, dict_):
+        params = inspect.signature(cls).parameters
+
+        sanitized_dict = {}
+        for k, v in dict_.items():
+            if k == "note_links" and v:
+                v = [SgGenericEntity.from_dict(_v) for _v in v]
+
+            sanitized_dict[k] = v
+
+        return cls(
+            **{
+                k: v for k, v in sanitized_dict.items()
+                if k in params
+            }
+        )
 
 
 @dataclass
@@ -80,6 +102,7 @@ class SgProject(SgIdMixin, SgBaseModel):
     end_date: Optional[str] = None
     updated_at: Optional[datetime.datetime] = None  # Example 2023-08-07T06:29:35Z
     image: Optional[str] = None  # When retrieve from SG API, should be the URL path
+    filmstrip_image: Optional[str] = None
     image_upload: Optional[str] = None  # For uploading to SG (str, bytes or os.PathLike object)
     duration: Optional[int] = None  # Number of days
 
@@ -103,8 +126,21 @@ class SgPipelineStep(SgIdMixin, _SgPipelineStep):
 @dataclass
 class _SgVersion(SgBaseModel):
     code: str  # Version Name
-    entity: Optional[dict] = None  # Link
-    notes: List[SgNote] = field(default_factory=list)
+    description: Optional[str] = None
+    flagged: bool = False
+    image: Optional[str] = None
+    filmstrip_image: Optional[str] = None
+    entity: Optional[SgGenericEntity] = None  # Link
+    sg_task: Optional[SgGenericEntity] = None
+    sg_uploaded_movie: Optional[TSgUploadedMovie] = None
+    sg_uploaded_movie_mp4: Optional[TSgUploadedMovie] = None
+    sg_uploaded_movie_webm: Optional[TSgUploadedMovie] = None
+    sg_path_to_frames: Optional[str] = None
+    sg_path_to_movie: Optional[str] = None
+    sg_status_list: str = ""
+    uploaded_movie_duration: Optional[str] = None
+    sg_uploaded_movie_frame_rate: Optional[str] = None
+    notes: List[SgGenericEntity] = field(default_factory=list)
     type: str = SgEntity.VERSION
 
     @classmethod
@@ -115,8 +151,12 @@ class _SgVersion(SgBaseModel):
         for k, v in dict_.items():
             if "." in k:
                 k = k.replace(".", "__")
+            if k == "entity" and v:
+                v = SgGenericEntity.from_dict(v)
+            if k == "sg_task" and v:
+                v = SgGenericEntity.from_dict(v)
             if k == "notes" and v:
-                v = [SgNote.from_dict(_v) for _v in v]
+                v = [SgGenericEntity.from_dict(_v) for _v in v]
 
             sanitized_dict[k] = v
 
@@ -136,6 +176,14 @@ class SgVersion(SgIdMixin, _SgVersion):
 @dataclass
 class _SgShot(SgBaseModel):
     code: str  # Shot Code
+    description: Optional[str] = None
+    image: Optional[str] = None
+    filmstrip_image: Optional[str] = None
+    sg_cut_in: Optional[int] = None
+    sg_cut_out: Optional[int] = None
+    sg_cut_duration: Optional[int] = None
+    sg_status_list: str = ""
+    sg_shot_type: str = ""
     type: str = SgEntity.SHOT
 
 
@@ -149,6 +197,7 @@ class _SgTask(SgBaseModel):
     name: str
     short_name: str = ""
     content: str = ""
+    sg_status_list: str = ""
     entity: Optional[SgGenericEntity] = None
     project: Optional[SgProject] = None
     type: str = SgEntity.TASK
@@ -163,6 +212,11 @@ class SgTask(SgIdMixin, _SgTask):
 class _SgAsset(SgBaseModel):
     code: str  # Shot Code
     tasks: List[SgTask] = field(default_factory=list)
+    notes: list[SgGenericEntity] = field(default_factory=list)
+    image: Optional[str] = None
+    filmstrip_image: Optional[str] = None
+    sg_asset_type: str = ""
+    sg_status_list: str = ""
     type: str = SgEntity.ASSET
 
     @classmethod
@@ -176,6 +230,9 @@ class _SgAsset(SgBaseModel):
 
             if k == "tasks" and v:
                 v = [SgTask.from_dict(_v) for _v in v]
+
+            if k == "notes" and v:
+                v = [SgGenericEntity.from_dict(_v) for _v in v]
 
             sanitized_dict[k] = v
 
@@ -230,6 +287,7 @@ class _SgHumanUser(SgBaseModel):
     firstname: str = ""
     lastname: str = ""
     email: str = ""
+    sg_status_list: str = ""
     file_access: bool = False
     type: str = SgEntity.HUMANUSER
     image: Optional[str] = None
@@ -258,6 +316,7 @@ class _SgBooking(SgBaseModel):
     end_date: str
     vacation: bool = True
     note: str = ""
+    sg_status_list: str = ""
     type: str = SgEntity.BOOKING
 
     @classmethod
@@ -297,8 +356,8 @@ class _SgTimeLog(SgBaseModel):
     description: str = ""
     duration: float = 0.0
     entity: Optional[SgGenericEntity] = None
-    project: Optional[SgProject] = None
-    user: Optional[SgHumanUser] = None
+    project: Optional[SgGenericEntity] = None
+    user: Optional[SgGenericEntity] = None
     type: str = SgEntity.TIMELOG
 
     @classmethod
@@ -311,10 +370,10 @@ class _SgTimeLog(SgBaseModel):
                 v = SgGenericEntity.from_dict(v)
 
             if k == "project" and v:
-                v = SgProject.from_dict(v)
+                v = SgGenericEntity.from_dict(v)
 
             if k == "user" and v:
-                v = SgHumanUser.from_dict(v)
+                v = SgGenericEntity.from_dict(v)
 
             sanitized_dict[k] = v
 
