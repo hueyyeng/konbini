@@ -28,18 +28,26 @@ class SgIdMixin:
 class SgBaseModel:
     _extra_fields: dict = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self, include_extra_fields=False) -> Dict[str, Any]:
         dict_ = {
             k: v for k, v in asdict(self).items() if v
         }
         dict_.pop("id", None)
         dict_.pop("type", None)
+        extra_fields = dict_.pop("_extra_fields", None)
+        if include_extra_fields:
+            dict_.update(extra_fields)
+
         return dict_
 
-    def to_full_dict(self) -> Dict[str, Any]:
+    def to_full_dict(self, include_extra_fields=False) -> Dict[str, Any]:
         dict_ = {
             k: v for k, v in asdict(self).items() if v
         }
+        extra_fields = dict_.pop("_extra_fields", None)
+        if include_extra_fields:
+            dict_.update(extra_fields)
+
         return dict_
 
     @classmethod
