@@ -789,6 +789,133 @@ class Konbini:
 
         return is_deleted
 
+    def create_sg_note(self, data: SgNote, **kwargs) -> dict:
+        """Create SG Note
+
+        Create SG Note entity. Refer to the data structure in Examples for
+        the bare minimum key values to successfully create a Note entity.
+
+        Parameters
+        ----------
+        data : SgNote
+            The SgNote data for create
+
+        Returns
+        -------
+        dict
+
+        Examples
+        --------
+        {
+            "subject": "Note Subject",
+            "content": "Body message (column name is Body in SG Web)",
+            "project": {
+                "id": 666,
+                "type": "Project"
+            },
+            "user": {
+                "id": 16,
+                "type": "HumanUser"
+            },
+            "addressings_to": [
+                {
+                    "id": 256,
+                    "type": "HumanUser"
+                }
+            ],
+            "note_links": [
+                {
+                    "id": 2048,
+                    "type": "Version"
+                }
+            ]
+        }
+
+        """
+        is_created = True
+        response_data = {}
+
+        if data.project is None:
+            raise Exception(f"Project is required!")
+
+        if data.user is None:
+            raise Exception(
+                f"User is required! If no explicit user is provided, the note's author "
+                f"will default to the API Key when viewed on SG Web."
+            )
+
+        if not data.addressings_to:
+            raise Exception(
+                f"Include at least one HumanUser for addressings_to field!"
+            )
+
+        if data.sg_status_list:
+            valid_values = self.get_valid_values(SgEntity.NOTE, "sg_status_list")
+            if data.sg_status_list not in valid_values:
+                raise Exception(f"Invalid {data.sg_status_list} value! Valid values: {valid_values}")
+
+        create_data = data.to_dict()
+        create_data.update(
+            {
+                "user": {
+                    "id": data.user.id,
+                    "type": SgEntity.HUMANUSER,
+                }
+            }
+        )
+        create_data.update(**kwargs)
+
+        try:
+            response_data = self.sg.create(SgEntity.NOTE, create_data)
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to create SG Note",
+                    "error": e,
+                    "data": data,
+                }
+            )
+            is_created = False
+
+        data = {
+            "is_created": is_created,
+        }
+        data.update(response_data)
+
+        return data
+
+    def get_sg_notes(self, entity_id: int, entity_type: str) -> List[SgNote]:
+        """Get SG Notes
+
+        Parameters
+        ----------
+        entity_id : int
+            The SG Entity ID.
+        entity_type: str
+            The SG Entity Type (refer to SgEntity)
+
+        Returns
+        -------
+        list[SgNote]
+            List of SgNote or empty list if no results from ShotGrid
+
+        """
+        filters = [
+            [
+                "note_links",
+                "is",
+                {
+                    "id": entity_id,
+                    "type": entity_type,
+                }
+            ],
+        ]
+        fields = NOTE_FIELDS
+
+        notes_ = self.sg.find(SgEntity.NOTE, filters, fields)
+        notes = [SgNote.from_dict(n) for n in notes_]
+        return notes
+
     def get_sg_notes_by_project(self, project_id: int) -> List[SgNote]:
         """Get SG Notes by Project
         

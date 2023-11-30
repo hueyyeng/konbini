@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import inspect
 from dataclasses import asdict, dataclass, field
@@ -24,6 +26,8 @@ class SgIdMixin:
 
 @dataclass
 class SgBaseModel:
+    _extra_fields: dict = field(default_factory=dict)
+
     def to_dict(self) -> Dict[str, Any]:
         dict_ = {
             k: v for k, v in asdict(self).items() if v
@@ -48,6 +52,13 @@ class SgBaseModel:
                 k = k.replace(".", "__")
             sanitized_dict[k] = v
 
+        _extra_fields = {}
+        for k, v in dict_.items():
+            if k not in params:
+                _extra_fields[k] = v
+
+        sanitized_dict["_extra_fields"] = _extra_fields
+
         return cls(
             **{
                 k: v for k, v in sanitized_dict.items()
@@ -67,6 +78,9 @@ class SgNote(SgIdMixin, SgBaseModel):
     subject: str = ""
     content: str = ""
     sg_status_list: str = ""
+    project: Optional[SgProject] = None
+    user: Optional[SgGenericEntity] = None
+    addressings_to: list[SgGenericEntity] = field(default_factory=list)
     note_links: list[SgGenericEntity] = field(default_factory=list)
     type: str = SgEntity.NOTE
 
@@ -113,8 +127,8 @@ class SgProject(SgIdMixin, SgBaseModel):
 
 @dataclass
 class _SgPipelineStep(SgBaseModel):
-    code: str  # The nice name (e.g. Model)
-    short_name: str  # Self-explanatory (e.g. MOD)
+    code: str = ""  # The nice name (e.g. Model)
+    short_name: str = ""  # Self-explanatory (e.g. MOD)
     type: str = SgEntity.STEP
 
 
@@ -125,7 +139,7 @@ class SgPipelineStep(SgIdMixin, _SgPipelineStep):
 
 @dataclass
 class _SgVersion(SgBaseModel):
-    code: str  # Version Name
+    code: str = ""  # Version Name
     description: Optional[str] = None
     flagged: bool = False
     image: Optional[str] = None
@@ -151,10 +165,13 @@ class _SgVersion(SgBaseModel):
         for k, v in dict_.items():
             if "." in k:
                 k = k.replace(".", "__")
+
             if k == "entity" and v:
                 v = SgGenericEntity.from_dict(v)
+
             if k == "sg_task" and v:
                 v = SgGenericEntity.from_dict(v)
+
             if k == "notes" and v:
                 v = [SgGenericEntity.from_dict(_v) for _v in v]
 
@@ -175,16 +192,38 @@ class SgVersion(SgIdMixin, _SgVersion):
 
 @dataclass
 class _SgShot(SgBaseModel):
-    code: str  # Shot Code
+    code: str = ""  # Shot Code
     description: Optional[str] = None
     image: Optional[str] = None
     filmstrip_image: Optional[str] = None
+    notes: list[SgGenericEntity] = field(default_factory=list)
     sg_cut_in: Optional[int] = None
     sg_cut_out: Optional[int] = None
     sg_cut_duration: Optional[int] = None
     sg_status_list: str = ""
     sg_shot_type: str = ""
     type: str = SgEntity.SHOT
+
+    @classmethod
+    def from_dict(cls, dict_):
+        params = inspect.signature(cls).parameters
+
+        sanitized_dict = {}
+        for k, v in dict_.items():
+            if "." in k:
+                k = k.replace(".", "__")
+
+            if k == "notes" and v:
+                v = [SgGenericEntity.from_dict(_v) for _v in v]
+
+            sanitized_dict[k] = v
+
+        return cls(
+            **{
+                k: v for k, v in sanitized_dict.items()
+                if k in params
+            }
+        )
 
 
 @dataclass
@@ -194,13 +233,35 @@ class SgShot(SgIdMixin, _SgShot):
 
 @dataclass
 class _SgTask(SgBaseModel):
-    name: str
+    name: str = ""
     short_name: str = ""
     content: str = ""
+    notes: list[SgGenericEntity] = field(default_factory=list)
     sg_status_list: str = ""
     entity: Optional[SgGenericEntity] = None
     project: Optional[SgProject] = None
     type: str = SgEntity.TASK
+
+    @classmethod
+    def from_dict(cls, dict_):
+        params = inspect.signature(cls).parameters
+
+        sanitized_dict = {}
+        for k, v in dict_.items():
+            if "." in k:
+                k = k.replace(".", "__")
+
+            if k == "notes" and v:
+                v = [SgGenericEntity.from_dict(_v) for _v in v]
+
+            sanitized_dict[k] = v
+
+        return cls(
+            **{
+                k: v for k, v in sanitized_dict.items()
+                if k in params
+            }
+        )
 
 
 @dataclass
@@ -210,7 +271,7 @@ class SgTask(SgIdMixin, _SgTask):
 
 @dataclass
 class _SgAsset(SgBaseModel):
-    code: str  # Shot Code
+    code: str = ""  # Shot Code
     tasks: List[SgTask] = field(default_factory=list)
     notes: list[SgGenericEntity] = field(default_factory=list)
     image: Optional[str] = None
@@ -251,8 +312,9 @@ class SgAsset(SgIdMixin, _SgAsset):
 
 @dataclass
 class _SgPlaylist(SgBaseModel):
-    code: str  # Playlist name
+    code: str = ""  # Playlist name
     description: str = ""
+    notes: list[SgGenericEntity] = field(default_factory=list)
     versions: List[SgVersion] = field(default_factory=list)
     type: str = SgEntity.PLAYLIST
 
@@ -264,6 +326,9 @@ class _SgPlaylist(SgBaseModel):
         for k, v in dict_.items():
             if k == "versions" and v:
                 v = [SgVersion.from_dict(_v) for _v in v]
+
+            if k == "notes" and v:
+                v = [SgGenericEntity.from_dict(_v) for _v in v]
 
             sanitized_dict[k] = v
 
@@ -282,7 +347,7 @@ class SgPlaylist(SgIdMixin, _SgPlaylist):
 
 @dataclass
 class _SgHumanUser(SgBaseModel):
-    login: str
+    login: str = ""
     name: str = ""
     firstname: str = ""
     lastname: str = ""
@@ -311,9 +376,9 @@ class SgHumanUser(SgIdMixin, _SgHumanUser):
 
 @dataclass
 class _SgBooking(SgBaseModel):
-    user: SgHumanUser
-    start_date: str
-    end_date: str
+    user: Optional[SgHumanUser] = None
+    start_date: str = ""
+    end_date: str = ""
     vacation: bool = True
     note: str = ""
     sg_status_list: str = ""
@@ -352,7 +417,7 @@ class SgBooking(SgIdMixin, _SgBooking):
 
 @dataclass
 class _SgTimeLog(SgBaseModel):
-    date: str
+    date: str = ""
     description: str = ""
     duration: float = 0.0
     entity: Optional[SgGenericEntity] = None
