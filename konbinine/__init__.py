@@ -182,7 +182,7 @@ class Konbini:
 
         return projects
 
-    def create_sg_project(self, data: SgProject) -> Tuple[int, bool]:
+    def create_sg_project(self, data: SgProject, **kwargs) -> Tuple[int, bool]:
         if not isinstance(data, SgProject):
             raise Exception("Data must be instance of SgProject!")
 
@@ -201,6 +201,7 @@ class Konbini:
         if data.image_upload:
             create_data["image"] = data.image_upload,
 
+        create_data.update(**kwargs)
         is_created = True
         sg_id = 0
 
@@ -220,7 +221,7 @@ class Konbini:
 
         return sg_id, is_created
 
-    def update_sg_project(self, data: SgProject) -> bool:
+    def update_sg_project(self, data: SgProject, **kwargs) -> bool:
         """Update SG Project
 
         Parameters
@@ -259,6 +260,8 @@ class Konbini:
         is_image_upload = data_.pop("image_upload", None)
         if is_image_upload:
             data_["image"] = is_image_upload
+
+        data_.update(**kwargs)
 
         try:
             self.sg.update(
@@ -361,7 +364,7 @@ class Konbini:
 
         return users
 
-    def create_sg_humanuser(self, data: SgHumanUser) -> dict:
+    def create_sg_humanuser(self, data: SgHumanUser, **kwargs) -> dict:
         """Create SG HumanUser
 
         Create SG HumanUser entity. Refer to the data structure in Examples for
@@ -393,6 +396,8 @@ class Konbini:
                 raise Exception(f"Invalid {data.sg_status_list} value! Valid values: {valid_values}")
 
         create_data = data.to_dict()
+        create_data.update(**kwargs)
+
         try:
             response_data = self.sg.create(SgEntity.HUMANUSER, create_data)
         except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
@@ -412,7 +417,7 @@ class Konbini:
 
         return data
 
-    def update_sg_humanuser(self, data: SgHumanUser) -> bool:
+    def update_sg_humanuser(self, data: SgHumanUser, **kwargs) -> bool:
         """Update SG HumanUser
 
         Parameters
@@ -444,6 +449,8 @@ class Konbini:
         data_.pop("email", None)
         data_.pop("firstname", None)
         data_.pop("lastname", None)
+
+        data_.update(**kwargs)
 
         try:
             self.sg.update(
@@ -684,7 +691,7 @@ class Konbini:
 
         return bookings
 
-    def create_sg_booking(self, data: SgBooking) -> dict:
+    def create_sg_booking(self, data: SgBooking, **kwargs) -> dict:
         """Create SG Booking
         
         Create SG Booking entity. Refer to the data structure in Examples for
@@ -732,6 +739,7 @@ class Konbini:
                 }
             }
         )
+        create_data.update(**kwargs)
 
         try:
             response_data = self.sg.create(SgEntity.BOOKING, create_data)
@@ -943,7 +951,7 @@ class Konbini:
         tasks = [SgTask.from_dict(t) for t in tasks_]
         return tasks
 
-    def create_sg_task(self, data: SgTask) -> bool:
+    def create_sg_task(self, data: SgTask, **kwargs) -> bool:
         """Create SG Task
 
         Create SG Task entity. Refer to the data structure in Examples for
@@ -984,6 +992,7 @@ class Konbini:
                 raise Exception(f"Invalid {data.sg_status_list} value! Valid values: {valid_values}")
 
         data_ = data.to_dict()
+        data_.update(**kwargs)
 
         try:
             self.sg.create("Task", data_)
@@ -1136,7 +1145,7 @@ class Konbini:
         timelogs = self.sg.find(SgEntity.TIMELOG, filters, fields)
         return timelogs
 
-    def create_sg_timelog(self, data: SgTimeLog) -> dict:
+    def create_sg_timelog(self, data: SgTimeLog, **kwargs) -> dict:
         """Create SG TimeLog
 
         Create SG TimeLog entity. Refer to the data structure in Examples for
@@ -1174,11 +1183,13 @@ class Konbini:
             }
 
         """
+        data_ = data.to_dict()
+        data_.update(**kwargs)
         is_created = True
         response_data = {}
 
         try:
-            response_data = self.sg.create("TimeLog", data.to_dict())
+            response_data = self.sg.create("TimeLog", data_)
         except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
             logger.error(
                 {
@@ -1227,7 +1238,7 @@ class Konbini:
 
         return batch_response
 
-    def update_sg_timelog(self, data: SgTimeLog) -> bool:
+    def update_sg_timelog(self, data: SgTimeLog, **kwargs) -> bool:
         """Update SG Timelog
 
         Parameters
@@ -1248,6 +1259,9 @@ class Konbini:
             raise Exception("No SgTimeLog ID found!")
 
         is_successful_update = True
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
         try:
             self.sg.update(
                 entity_type=SgEntity.TIMELOG,
