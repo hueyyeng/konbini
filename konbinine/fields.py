@@ -79,6 +79,21 @@ VERSION_FIELDS = [
     "notes",
 ]
 
+ATTACHMENT_FIELDS = [
+    "this_file",
+    "display_name",
+    "description",
+    "image",
+    "filename",
+    "file_extension",
+    "file_size",
+    "filmstrip_image",
+    "processing_status",
+    "original_fname",
+    "open_notes_count",
+    "sg_status_list",
+]
+
 NOTE_FIELDS = [
     "subject",
     "content",
