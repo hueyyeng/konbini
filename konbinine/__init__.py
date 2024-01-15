@@ -1,4 +1,4 @@
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 import calendar
 import datetime
@@ -13,6 +13,7 @@ from konbinine.enums import SgEntity, SgHumanUserStatus
 from konbinine.exceptions import MissingValueError
 from konbinine.fields import (
     ASSET_FIELDS,
+    ATTACHMENT_FIELDS,
     BOOKING_FIELDS,
     HUMANUSER_FIELDS,
     NOTE_FIELDS,
@@ -25,6 +26,7 @@ from konbinine.fields import (
 from konbinine.logs import KonbiniAdapter
 from konbinine.models import (
     SgAsset,
+    SgAttachment,
     SgBooking,
     SgHumanUser,
     SgNote,
@@ -795,6 +797,10 @@ class Konbini:
         Create SG Note entity. Refer to the data structure in Examples for
         the bare minimum key values to successfully create a Note entity.
 
+        For devs, the "note_links" is the field that you want to specify to
+        ensure the created note is link to whatever entities you want the notes
+        to appear
+
         Parameters
         ----------
         data : SgNote
@@ -947,6 +953,46 @@ class Konbini:
         notes_ = self.sg.find(SgEntity.NOTE, filters, fields)
         notes = [SgNote.from_dict(n) for n in notes_]
         return notes
+
+    def update_sg_note(self, data: SgNote, **kwargs) -> bool:
+        """Update SG Note
+
+        Parameters
+        ----------
+        data : SgNote
+            The SgNote data for update
+
+        Returns
+        -------
+        bool
+            True if updated successfully
+
+        """
+        if not isinstance(data, SgNote):
+            raise Exception("Data must be instance of SgNote!")
+
+        if not data.id:
+            raise Exception("No SgNote ID found!")
+
+        is_successful_update = True
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        try:
+            self.sg.update(
+                entity_type=SgEntity.NOTE,
+                entity_id=data.id,
+                data=data.to_dict(),
+            )
+            logger.info(f"Update Note {data.id} successful")
+        except shotgun_api3.ShotgunError as e:
+            logger.warning(f"Error updating Note {data.id}: {e}")
+            is_successful_update = False
+        except Exception as e:
+            logger.error(f"Unhandled exception when updating Note {data.id}: {e}")
+            is_successful_update = False
+
+        return is_successful_update
 
     def get_sg_assets(
             self,
@@ -1233,6 +1279,43 @@ class Konbini:
         versions = [SgVersion.from_dict(t) for t in versions_]
         return versions
 
+    def update_sg_version(self, data: SgVersion, **kwargs) -> bool:
+        """Update SG Version
+
+        Parameters
+        ----------
+        data : SgVersion
+            The SgVersion data for update
+
+        Returns
+        -------
+        bool
+            True if updated successfully
+
+        """
+        if not isinstance(data, SgVersion):
+            raise Exception("Data must be instance of SgVersion!")
+
+        if not data.id:
+            raise Exception("No SgVersion ID found!")
+
+        is_successful_update = True
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        try:
+            self.sg.update(
+                entity_type=SgEntity.VERSION,
+                entity_id=data.id,
+                data=data.to_dict(),
+            )
+            logger.info(f"Update SG Version {data.id} successful")
+        except shotgun_api3.ShotgunError as e:
+            logger.warning(f"Error updating SG Version {data.id}: {e}")
+            is_successful_update = False
+
+        return is_successful_update
+
     def get_sg_timelogs(
             self,
             sg_humanuser_id: int,
@@ -1466,3 +1549,192 @@ class Konbini:
             is_bulk_delete_timelog_successful = False
 
         return is_bulk_delete_timelog_successful
+
+    def get_sg_attachments(
+            self,
+            attachment_id: Optional[int] = None,
+            custom_fields: Optional[List[str]] = None,
+    ) -> List[SgAttachment]:
+        """Get SG Attachments
+
+        Parameters
+        ----------
+        attachment_id : int
+            ShotGrid Attachment ID. Default None which retrieve all Attachments
+        custom_fields : list[str]
+            List of custom fields
+
+        Returns
+        -------
+        list of SgAttachment
+            List of SgAttachment or empty list if no results from ShotGrid
+
+        """
+        filters = []
+        if attachment_id:
+            filters = [
+                [
+                    "id",
+                    "is",
+                    attachment_id
+                ]
+            ]
+
+        fields = ATTACHMENT_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        _attachments: List[dict] = self.sg.find(SgEntity.ATTACHMENT, filters, fields)
+        if not _attachments:
+            return []
+
+        attachments = []
+        for attachment in _attachments:
+            sg_attachment = SgAttachment.from_dict(attachment)
+            attachments.append(sg_attachment)
+
+        return attachments
+
+    def upload_attachment(
+            self,
+            entity_id: int,
+            entity_type: str,
+            attachment_file: str,
+            **kwargs,
+    ) -> int:
+        """Upload attachment
+
+        Upload file as SG Attachment entity. Refer to the data structure in Examples for
+        the bare minimum key values to successfully create the Attachment entity.
+
+        CAUTION FOR DEVS: USE THE UPLOAD_MOVIE WRAPPER FUNCTION IF YOU NEED TO DISPLAY
+         PLAYBLAST/MOVIE/PICTURE IN SHOTGRID SCREENING ROOM
+
+        Parameters
+        ----------
+        entity_id : int
+            The entity ID
+        entity_type : str
+            The entity type (e.g. 'Shot', 'Asset', etc.)
+        attachment_file : str
+            The attachment file path
+
+        Returns
+        -------
+        int
+            The created attachment ID. If error, the return value will be 0
+
+        """
+        attachment_id = 0
+        try:
+            attachment_id = self.sg.upload(
+                entity_id=entity_id,
+                entity_type=entity_type,
+                path=attachment_file,
+                **kwargs,
+            )
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to create SG Attachment",
+                    "error": e,
+                    "attachment_file": attachment_file,
+                }
+            )
+
+        return attachment_id
+
+    def upload_movie(
+        self,
+        entity_id: int,
+        entity_type: str,
+        attachment_file: str,
+        **kwargs,
+    ) -> int:
+        """Upload movie
+
+        Same as upload_attachment but opinionated for uploading... movie/picture for
+        Version entity? The reason is typically for Screening Room, it checks for the
+        sg_uploaded_movie field instead of image field. Correct me if I'm wrong by
+        creating a GitHub issue!
+
+        Parameters
+        ----------
+        entity_id : int
+            The entity ID
+        entity_type : str
+            The entity type (e.g. 'Shot', 'Asset', etc.)
+        attachment_file : str
+            The attachment file path
+
+        Returns
+        -------
+        int
+            The created attachment ID. If error, the return value will be 0
+
+        """
+        attachment_id = 0
+        try:
+            attachment_id = self.sg.upload(
+                entity_id=entity_id,
+                entity_type=entity_type,
+                path=attachment_file,
+                field_name="sg_uploaded_movie",
+                **kwargs,
+            )
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to upload movie",
+                    "error": e,
+                    "attachment_file": attachment_file,
+                }
+            )
+
+        return attachment_id
+
+    def upload_thumbnail(
+        self,
+        entity_id: int,
+        entity_type: str,
+        attachment_file: str,
+        **kwargs,
+    ) -> int:
+        """Upload thumbnail
+
+        Similar to upload_attachment but for thumbnail. DON'T USE THIS IF YOU'RE PLANNING
+        TO UPLOAD SOMETHING TO SHOW UP IN THE SCREENING ROOM!
+
+        Parameters
+        ----------
+        entity_id : int
+         The entity ID
+        entity_type : str
+         The entity type (e.g. 'Shot', 'Asset', etc.)
+        attachment_file : str
+         The attachment file path
+
+        Returns
+        -------
+        int
+         The created attachment ID. If error, the return value will be 0
+
+        """
+        attachment_id = 0
+        try:
+            attachment_id = self.sg.upload_thumbnail(
+                entity_id=entity_id,
+                entity_type=entity_type,
+                path=attachment_file,
+                **kwargs,
+            )
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to upload thumbnail",
+                    "error": e,
+                    "attachment_file": attachment_file,
+                }
+            )
+
+        return attachment_id

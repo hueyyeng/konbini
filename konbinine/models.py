@@ -88,8 +88,10 @@ class SgNote(SgIdMixin, SgBaseModel):
     sg_status_list: str = ""
     project: Optional[SgProject] = None
     user: Optional[SgGenericEntity] = None
+    addressings_cc: list[SgGenericEntity] = field(default_factory=list)
     addressings_to: list[SgGenericEntity] = field(default_factory=list)
     note_links: list[SgGenericEntity] = field(default_factory=list)
+    attachments: list[SgGenericEntity] = field(default_factory=list)
     type: str = SgEntity.NOTE
 
     @classmethod
@@ -98,7 +100,19 @@ class SgNote(SgIdMixin, SgBaseModel):
 
         sanitized_dict = {}
         for k, v in dict_.items():
+            if k == "user" and v:
+                v = SgGenericEntity.from_dict(v)
+
             if k == "note_links" and v:
+                v = [SgGenericEntity.from_dict(_v) for _v in v]
+
+            if k == "addressings_cc" and v:
+                v = [SgGenericEntity.from_dict(_v) for _v in v]
+
+            if k == "addressings_to" and v:
+                v = [SgGenericEntity.from_dict(_v) for _v in v]
+
+            if k == "attachments" and v:
                 v = [SgGenericEntity.from_dict(_v) for _v in v]
 
             sanitized_dict[k] = v
@@ -471,3 +485,51 @@ class _SgTimeLog(SgBaseModel):
 @dataclass
 class SgTimeLog(SgIdMixin, _SgTimeLog):
     pass
+
+
+@dataclass
+class SgAttachmentFile(SgIdMixin, SgBaseModel):
+    url: str = ""
+    name: str = ""  # the filename
+    content_type: Optional[str] = None
+    link_type: str = ""
+    type: str = SgEntity.ATTACHMENT
+
+
+@dataclass
+class SgAttachment(SgBaseModel):
+    # NOTE: There is no ID attribute on Attachment entity, but it is stored
+    #  in 'this_file' attribute where you can find the file at 'Files' page on SG
+    this_file: Optional[SgAttachmentFile] = None
+    display_name: str = ""  # filename
+    description: Optional[str] = None
+    image: Optional[str] = None
+    filename: Optional[str] = None
+    file_extension: Optional[str] = None
+    file_size: Optional[int] = None
+    filmstrip_image: Optional[str] = None
+    processing_status: Optional[str] = None
+    original_fname: Optional[str] = None
+    open_notes_count: int = 0
+    sg_status_list: str = ""
+
+    @classmethod
+    def from_dict(cls, dict_):
+        params = inspect.signature(cls).parameters
+
+        sanitized_dict = {}
+        for k, v in dict_.items():
+            if "." in k:
+                k = k.replace(".", "__")
+
+            if k == "this_file" and v:
+                v = SgAttachmentFile.from_dict(v)
+
+            sanitized_dict[k] = v
+
+        return cls(
+            **{
+                k: v for k, v in sanitized_dict.items()
+                if k in params
+            }
+        )
