@@ -82,8 +82,13 @@ VERSION_FIELDS = [
 NOTE_FIELDS = [
     "subject",
     "content",
-    "sg_status_list",
+    "project",
+    "user",
+    "attachments",
+    "addressings_cc",
+    "addressings_to",
     "note_links",
+    "sg_status_list",
 ]
 
 BOOKING_FIELDS = [

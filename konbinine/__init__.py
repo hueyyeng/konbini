@@ -25,6 +25,7 @@ from konbinine.fields import (
 from konbinine.logs import KonbiniAdapter
 from konbinine.models import (
     SgAsset,
+    SgAttachment,
     SgBooking,
     SgHumanUser,
     SgNote,
@@ -948,6 +949,46 @@ class Konbini:
         notes = [SgNote.from_dict(n) for n in notes_]
         return notes
 
+    def update_sg_note(self, data: SgNote, **kwargs) -> bool:
+        """Update SG Note
+
+        Parameters
+        ----------
+        data : SgNote
+            The SgNote data for update
+
+        Returns
+        -------
+        bool
+            True if updated successfully
+
+        """
+        if not isinstance(data, SgNote):
+            raise Exception("Data must be instance of SgNote!")
+
+        if not data.id:
+            raise Exception("No SgNote ID found!")
+
+        is_successful_update = True
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        try:
+            self.sg.update(
+                entity_type=SgEntity.NOTE,
+                entity_id=data.id,
+                data=data.to_dict(),
+            )
+            logger.info(f"Update Note {data.id} successful")
+        except shotgun_api3.ShotgunError as e:
+            logger.warning(f"Error updating Note {data.id}: {e}")
+            is_successful_update = False
+        except Exception as e:
+            logger.error(f"Unhandled exception when updating Note {data.id}: {e}")
+            is_successful_update = False
+
+        return is_successful_update
+
     def get_sg_assets(
             self,
             assets_id: Union[int, Set[int], List[int]],
@@ -1466,3 +1507,49 @@ class Konbini:
             is_bulk_delete_timelog_successful = False
 
         return is_bulk_delete_timelog_successful
+
+    def create_sg_attachment(
+            self,
+            entity_id: int,
+            entity_type: str,
+            attachment_file: str,
+            **kwargs,
+    ) -> int:
+        """Create SG Attachment
+
+        Create SG Attachment entity. Refer to the data structure in Examples for
+        the bare minimum key values to successfully create the Attachment entity.
+
+        Parameters
+        ----------
+        entity_id : int
+            The entity ID
+        entity_type : str
+            The entity type (e.g. 'Shot', 'Asset', etc.)
+        attachment_file : str
+            The attachment file path
+
+        Returns
+        -------
+        int
+            The created attachment ID. If error, the return value will be 0
+
+        """
+        attachment_id = 0
+        try:
+            attachment_id = self.sg.upload(
+                entity_id=entity_id,
+                entity_type=entity_type,
+                path=attachment_file,
+                **kwargs,
+            )
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to create SG Attachment",
+                    "error": e,
+                    "attachment_file": attachment_file,
+                }
+            )
+
+        return attachment_id
