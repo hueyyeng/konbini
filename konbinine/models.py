@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import inspect
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 from konbinine.enums import SgEntity
 from konbinine.exceptions import (
@@ -28,13 +28,30 @@ class SgIdMixin:
 class SgBaseModel:
     _extra_fields: dict = field(default_factory=dict)
 
+    @staticmethod
+    def _get_model(
+        field_name: str,
+        value: None | dict | list[dict],
+        model_lookup: dict[str, Type[SgBaseModel]],
+    ) -> None | dict | list[dict] | list[SgBaseModel] | SgBaseModel:
+        if value is None:
+            return None
+
+        model = model_lookup[field_name]
+        if isinstance(value, list):
+            value_: list[dict] = value
+            return [model.from_dict(_v) for _v in value_]
+        else:
+            value_: dict = value
+            return model.from_dict(value_)
+
     def to_dict(self, include_extra_fields=False) -> Dict[str, Any]:
         dict_ = {
             k: v for k, v in asdict(self).items() if v
         }
         dict_.pop("id", None)
         dict_.pop("type", None)
-        extra_fields = dict_.pop("_extra_fields", None)
+        extra_fields = dict_.pop("_extra_fields", {})
         if include_extra_fields:
             dict_.update(extra_fields)
 
@@ -44,7 +61,7 @@ class SgBaseModel:
         dict_ = {
             k: v for k, v in asdict(self).items() if v
         }
-        extra_fields = dict_.pop("_extra_fields", None)
+        extra_fields = dict_.pop("_extra_fields", {})
         if include_extra_fields:
             dict_.update(extra_fields)
 
@@ -85,36 +102,34 @@ class SgGenericEntity(SgIdMixin, SgBaseModel):
 class SgNote(SgIdMixin, SgBaseModel):
     subject: str = ""
     content: str = ""
-    sg_status_list: str = ""
     project: Optional[SgProject] = None
-    user: Optional[SgGenericEntity] = None
+    user: Optional[SgHumanUser] = None
     addressings_cc: list[SgGenericEntity] = field(default_factory=list)
     addressings_to: list[SgGenericEntity] = field(default_factory=list)
     note_links: list[SgGenericEntity] = field(default_factory=list)
     attachments: list[SgGenericEntity] = field(default_factory=list)
+    sg_status_list: str = ""
     type: str = SgEntity.NOTE
 
     @classmethod
     def from_dict(cls, dict_):
         params = inspect.signature(cls).parameters
 
+        _map = {
+            "project": SgProject,
+            "user": SgHumanUser,
+            "addressings_cc": SgGenericEntity,
+            "addressings_to": SgGenericEntity,
+            "note_links": SgGenericEntity,
+            "attachments": SgGenericEntity,
+        }
+
         sanitized_dict = {}
         for k, v in dict_.items():
-            if k == "user" and v:
-                v = SgGenericEntity.from_dict(v)
+            if "." in k:
+                k = k.replace(".", "__")
 
-            if k == "note_links" and v:
-                v = [SgGenericEntity.from_dict(_v) for _v in v]
-
-            if k == "addressings_cc" and v:
-                v = [SgGenericEntity.from_dict(_v) for _v in v]
-
-            if k == "addressings_to" and v:
-                v = [SgGenericEntity.from_dict(_v) for _v in v]
-
-            if k == "attachments" and v:
-                v = [SgGenericEntity.from_dict(_v) for _v in v]
-
+            v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
         return cls(
@@ -128,7 +143,8 @@ class SgNote(SgIdMixin, SgBaseModel):
 @dataclass
 class SgProject(SgIdMixin, SgBaseModel):
     name: str = ""
-    type: str = SgEntity.PROJECT
+    is_template: bool = False
+    is_demo: bool = False
     archived: bool = False
     code: Optional[str] = None
     sg_description: Optional[str] = None
@@ -138,9 +154,34 @@ class SgProject(SgIdMixin, SgBaseModel):
     end_date: Optional[str] = None
     updated_at: Optional[datetime.datetime] = None  # Example 2023-08-07T06:29:35Z
     image: Optional[str] = None  # When retrieve from SG API, should be the URL path
-    filmstrip_image: Optional[str] = None
     image_upload: Optional[str] = None  # For uploading to SG (str, bytes or os.PathLike object)
+    filmstrip_image: Optional[str] = None
     duration: Optional[int] = None  # Number of days
+    users: list[SgHumanUser] = field(default_factory=list)
+    type: str = SgEntity.PROJECT
+
+    @classmethod
+    def from_dict(cls, dict_):
+        params = inspect.signature(cls).parameters
+
+        _map = {
+            "users": SgHumanUser,
+        }
+
+        sanitized_dict = {}
+        for k, v in dict_.items():
+            if "." in k:
+                k = k.replace(".", "__")
+
+            v = cls._get_model(k, v, _map) if k in _map else v
+            sanitized_dict[k] = v
+
+        return cls(
+            **{
+                k: v for k, v in sanitized_dict.items()
+                if k in params
+            }
+        )
 
     def validate_stale_data(self) -> bool:
         current_dt = get_current_utc_dt()
@@ -167,36 +208,49 @@ class _SgVersion(SgBaseModel):
     image: Optional[str] = None
     filmstrip_image: Optional[str] = None
     entity: Optional[SgGenericEntity] = None  # Link
+    project: Optional[SgProject] = None
+    user: Optional[SgHumanUser] = None
+    tasks: List[SgGenericEntity] = field(default_factory=list)
+    playlists: List[SgGenericEntity] = field(default_factory=list)
+    notes: List[SgGenericEntity] = field(default_factory=list)
+    open_notes: List[SgGenericEntity] = field(default_factory=list)
+    otio_playable: Optional[str] = None
+    cuts: List[SgGenericEntity] = field(default_factory=list)
+    uploaded_movie_duration: Optional[str] = None
     sg_task: Optional[SgGenericEntity] = None
     sg_uploaded_movie: Optional[TSgUploadedMovie] = None
     sg_uploaded_movie_mp4: Optional[TSgUploadedMovie] = None
     sg_uploaded_movie_webm: Optional[TSgUploadedMovie] = None
+    sg_uploaded_movie_transcoding_status: Optional[int] = None
+    sg_uploaded_movie_frame_rate: Optional[str] = None
     sg_path_to_frames: Optional[str] = None
     sg_path_to_movie: Optional[str] = None
     sg_status_list: str = ""
-    uploaded_movie_duration: Optional[str] = None
-    sg_uploaded_movie_frame_rate: Optional[str] = None
-    notes: List[SgGenericEntity] = field(default_factory=list)
+    sg_version_type: str = ""
     type: str = SgEntity.VERSION
 
     @classmethod
     def from_dict(cls, dict_):
         params = inspect.signature(cls).parameters
 
+        _map = {
+            "project": SgProject,
+            "entity": SgGenericEntity,
+            "user": SgHumanUser,
+            "cuts": SgGenericEntity,
+            "sg_task": SgGenericEntity,
+            "tasks": SgGenericEntity,
+            "playlists": SgGenericEntity,
+            "notes": SgGenericEntity,
+            "open_notes": SgGenericEntity,
+        }
+
         sanitized_dict = {}
         for k, v in dict_.items():
             if "." in k:
                 k = k.replace(".", "__")
 
-            if k == "entity" and v:
-                v = SgGenericEntity.from_dict(v)
-
-            if k == "sg_task" and v:
-                v = SgGenericEntity.from_dict(v)
-
-            if k == "notes" and v:
-                v = [SgGenericEntity.from_dict(_v) for _v in v]
-
+            v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
         return cls(
@@ -218,26 +272,52 @@ class _SgShot(SgBaseModel):
     description: Optional[str] = None
     image: Optional[str] = None
     filmstrip_image: Optional[str] = None
+    project: Optional[SgProject] = None
     notes: list[SgGenericEntity] = field(default_factory=list)
+    open_notes: list[SgGenericEntity] = field(default_factory=list)
+    assets: list[SgGenericEntity] = field(default_factory=list)
+    tasks: list[SgGenericEntity] = field(default_factory=list)
+    parent_shots: list[SgGenericEntity] = field(default_factory=list)
+    shots: list[SgGenericEntity] = field(default_factory=list)
+    head_in: Optional[int] = None
+    head_duration: Optional[int] = None
+    head_out: Optional[int] = None
+    tail_in: Optional[int] = None
+    tail_out: Optional[int] = None
+    sg_head_in: Optional[int] = None
+    sg_head_out: Optional[int] = None
     sg_cut_in: Optional[int] = None
     sg_cut_out: Optional[int] = None
     sg_cut_duration: Optional[int] = None
+    sg_working_duration: Optional[int] = None
     sg_status_list: str = ""
     sg_shot_type: str = ""
+    sg_published_files: list[SgGenericEntity] = field(default_factory=list)
+    sg_versions: list[SgGenericEntity] = field(default_factory=list)
     type: str = SgEntity.SHOT
 
     @classmethod
     def from_dict(cls, dict_):
         params = inspect.signature(cls).parameters
 
+        _map = {
+            "project": SgProject,
+            "notes": SgGenericEntity,
+            "open_notes": SgGenericEntity,
+            "assets": SgGenericEntity,
+            "tasks": SgGenericEntity,
+            "parent_shots": SgGenericEntity,
+            "shots": SgGenericEntity,
+            "sg_published_files": SgGenericEntity,
+            "sg_versions": SgGenericEntity,
+        }
+
         sanitized_dict = {}
         for k, v in dict_.items():
             if "." in k:
                 k = k.replace(".", "__")
 
-            if k == "notes" and v:
-                v = [SgGenericEntity.from_dict(_v) for _v in v]
-
+            v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
         return cls(
@@ -258,24 +338,50 @@ class _SgTask(SgBaseModel):
     name: str = ""
     short_name: str = ""
     content: str = ""
-    notes: list[SgGenericEntity] = field(default_factory=list)
-    sg_status_list: str = ""
+    duration: int = 0
+    milestone: bool = False
+    est_in_mins: Optional[int] = None  # Bid on SG Web
+    time_logs_sum: Optional[int] = None  # Time Logged on SG Web
+    time_percent_of_est: Optional[int] = None  # Time Logged - % of Bid on SG Web
+    time_vs_est: Optional[int] = None
+    implicit: bool = False
+    image: Optional[str] = None
+    filmstrip_image: Optional[str] = None
+    start_date: Optional[str] = None
+    due_date: Optional[str] = None
+    workload: int = 0  # calculated field type that defaults on using Duration field on SG Web
+    task_reviewers: list[SgHumanUser] = field(default_factory=list)
+    task_assignees: list[SgHumanUser] = field(default_factory=list)
     entity: Optional[SgGenericEntity] = None
     project: Optional[SgProject] = None
+    sg_versions: list[SgGenericEntity] = field(default_factory=list)
+    step: Optional[SgGenericEntity] = None
+    notes: list[SgGenericEntity] = field(default_factory=list)
+    open_notes: list[SgGenericEntity] = field(default_factory=list)
+    sg_status_list: str = ""
     type: str = SgEntity.TASK
 
     @classmethod
     def from_dict(cls, dict_):
         params = inspect.signature(cls).parameters
 
+        _map = {
+            "task_reviewers": SgHumanUser,
+            "task_assignees": SgHumanUser,
+            "entity": SgGenericEntity,
+            "project": SgProject,
+            "sg_versions": SgGenericEntity,
+            "step": SgGenericEntity,
+            "notes": SgGenericEntity,
+            "open_notes": SgGenericEntity,
+        }
+
         sanitized_dict = {}
         for k, v in dict_.items():
             if "." in k:
                 k = k.replace(".", "__")
 
-            if k == "notes" and v:
-                v = [SgGenericEntity.from_dict(_v) for _v in v]
-
+            v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
         return cls(
@@ -296,27 +402,35 @@ class _SgAsset(SgBaseModel):
     code: str = ""  # Shot Code
     tasks: List[SgTask] = field(default_factory=list)
     notes: list[SgGenericEntity] = field(default_factory=list)
+    open_notes: list[SgGenericEntity] = field(default_factory=list)
+    project: Optional[SgProject] = None
     image: Optional[str] = None
     filmstrip_image: Optional[str] = None
     sg_asset_type: str = ""
     sg_status_list: str = ""
+    sg_published_files: list[SgGenericEntity] = field(default_factory=list)
+    sg_versions: list[SgGenericEntity] = field(default_factory=list)
     type: str = SgEntity.ASSET
 
     @classmethod
     def from_dict(cls, dict_):
         params = inspect.signature(cls).parameters
 
+        _map = {
+            "tasks": SgTask,
+            "notes": SgGenericEntity,
+            "open_notes": SgGenericEntity,
+            "project": SgProject,
+            "sg_published_files": SgGenericEntity,
+            "sg_versions": SgGenericEntity,
+        }
+
         sanitized_dict = {}
         for k, v in dict_.items():
             if "." in k:
                 k = k.replace(".", "__")
 
-            if k == "tasks" and v:
-                v = [SgTask.from_dict(_v) for _v in v]
-
-            if k == "notes" and v:
-                v = [SgGenericEntity.from_dict(_v) for _v in v]
-
+            v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
         return cls(
@@ -336,7 +450,14 @@ class SgAsset(SgIdMixin, _SgAsset):
 class _SgPlaylist(SgBaseModel):
     code: str = ""  # Playlist name
     description: str = ""
+    locked: bool = False
+    locked_by: Optional[SgHumanUser] = None
+    project: Optional[SgProject] = None
+    image: Optional[str] = None
+    filmstrip_image: Optional[str] = None
+    sg_date_and_time: Optional[str] = None
     notes: list[SgGenericEntity] = field(default_factory=list)
+    open_notes: list[SgGenericEntity] = field(default_factory=list)
     versions: List[SgVersion] = field(default_factory=list)
     type: str = SgEntity.PLAYLIST
 
@@ -344,14 +465,20 @@ class _SgPlaylist(SgBaseModel):
     def from_dict(cls, dict_):
         params = inspect.signature(cls).parameters
 
+        _map = {
+            "locked_by": SgHumanUser,
+            "project": SgProject,
+            "notes": SgGenericEntity,
+            "open_notes": SgGenericEntity,
+            "versions": SgVersion,
+        }
+
         sanitized_dict = {}
         for k, v in dict_.items():
-            if k == "versions" and v:
-                v = [SgVersion.from_dict(_v) for _v in v]
+            if "." in k:
+                k = k.replace(".", "__")
 
-            if k == "notes" and v:
-                v = [SgGenericEntity.from_dict(_v) for _v in v]
-
+            v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
         return cls(
@@ -374,12 +501,44 @@ class _SgHumanUser(SgBaseModel):
     firstname: str = ""
     lastname: str = ""
     email: str = ""
-    sg_status_list: str = ""
     file_access: bool = False
-    type: str = SgEntity.HUMANUSER
     image: Optional[str] = None
-    projects: Optional[List[dict]] = None
-    groups: Optional[List[dict]] = None
+    filmstrip_image: Optional[str] = None
+    groups: List[SgGenericEntity] = field(default_factory=list)
+    bookings: List[SgGenericEntity] = field(default_factory=list)
+    department: Optional[SgGenericEntity] = None
+    projects: List[SgProject] = field(default_factory=list)
+    contracts: List[SgGenericEntity] = field(default_factory=list)
+    language: str = "en"
+    sg_status_list: str = ""
+    type: str = SgEntity.HUMANUSER
+
+    @classmethod
+    def from_dict(cls, dict_):
+        params = inspect.signature(cls).parameters
+
+        _map = {
+            "groups": SgGenericEntity,
+            "bookings": SgGenericEntity,
+            "department": SgGenericEntity,
+            "projects": SgProject,
+            "contracts": SgGenericEntity,
+        }
+
+        sanitized_dict = {}
+        for k, v in dict_.items():
+            if "." in k:
+                k = k.replace(".", "__")
+
+            v = cls._get_model(k, v, _map) if k in _map else v
+            sanitized_dict[k] = v
+
+        return cls(
+            **{
+                k: v for k, v in sanitized_dict.items()
+                if k in params
+            }
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         dict_ = {
@@ -401,8 +560,10 @@ class _SgBooking(SgBaseModel):
     user: Optional[SgHumanUser] = None
     start_date: str = ""
     end_date: str = ""
-    vacation: bool = True
     note: str = ""
+    vacation: bool = True
+    project: Optional[SgProject] = None
+    percent_allocation: int = 100
     sg_status_list: str = ""
     type: str = SgEntity.BOOKING
 
@@ -410,11 +571,17 @@ class _SgBooking(SgBaseModel):
     def from_dict(cls, dict_):
         params = inspect.signature(cls).parameters
 
+        _map = {
+            "user": SgHumanUser,
+            "project": SgProject,
+        }
+
         sanitized_dict = {}
         for k, v in dict_.items():
-            if k == "user" and v:
-                v = SgHumanUser.from_dict(v)
+            if "." in k:
+                k = k.replace(".", "__")
 
+            v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
         return cls(
@@ -443,25 +610,26 @@ class _SgTimeLog(SgBaseModel):
     description: str = ""
     duration: float = 0.0
     entity: Optional[SgGenericEntity] = None
-    project: Optional[SgGenericEntity] = None
-    user: Optional[SgGenericEntity] = None
+    project: Optional[SgProject] = None
+    user: Optional[SgHumanUser] = None
     type: str = SgEntity.TIMELOG
 
     @classmethod
     def from_dict(cls, dict_):
         params = inspect.signature(cls).parameters
 
+        _map = {
+            "entity": SgGenericEntity,
+            "project": SgProject,
+            "user": SgHumanUser,
+        }
+
         sanitized_dict = {}
         for k, v in dict_.items():
-            if k == "entity" and v:
-                v = SgGenericEntity.from_dict(v)
+            if "." in k:
+                k = k.replace(".", "__")
 
-            if k == "project" and v:
-                v = SgGenericEntity.from_dict(v)
-
-            if k == "user" and v:
-                v = SgGenericEntity.from_dict(v)
-
+            v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
         return cls(
@@ -517,14 +685,16 @@ class SgAttachment(SgBaseModel):
     def from_dict(cls, dict_):
         params = inspect.signature(cls).parameters
 
+        _map = {
+            "this_file": SgAttachmentFile,
+        }
+
         sanitized_dict = {}
         for k, v in dict_.items():
             if "." in k:
                 k = k.replace(".", "__")
 
-            if k == "this_file" and v:
-                v = SgAttachmentFile.from_dict(v)
-
+            v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
         return cls(
