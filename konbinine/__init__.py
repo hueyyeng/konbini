@@ -95,9 +95,13 @@ class Konbini:
         except (ProtocolError, Exception) as e:
             # TODO: Handle this gracefully? The SG outage back in 2023-01-04 (UTC) breaks BADLY and
             #  resulted in this weird exception handling. Refer to https://health.autodesk.com/incidents/d3tbvtvrmq1y
+            #  Forgot to include this link https://status.shotgridsoftware.com/
             self.sg = shotgun_api3.Shotgun
             logger.error(e, exc_info=True)
-            logger.error("Highly advisable to verify SG service outages!")
+            logger.error(
+                "Highly advisable to verify SG service outages! "
+                "https://status.shotgridsoftware.com/"
+            )
 
     def get_sg_entity_schema_fields(self, entity: str) -> List[str]:
         """Get SG Entity Schema Fields
@@ -105,11 +109,11 @@ class Konbini:
         Parameters
         ----------
         entity : str
-            The entity type (e.g. Asset, Shot, Timelog, etc)
+            The entity type (e.g. Asset, Shot, Timelog, etc.)
 
         Returns
         -------
-        list
+        list[str]
             The list of fields belonging to the entity type
 
         """
@@ -122,13 +126,14 @@ class Konbini:
         Parameters
         ----------
         entity : str
-            The entity type (e.g. Asset, Shot, Timelog, etc)
+            The entity type (e.g. Asset, Shot, Timelog, etc.)
         field_name : str
-            The field name (e.g. sg_status, sg_status_list, etc)
+            The field name (e.g. sg_status, sg_status_list, etc.)
 
         Returns
         -------
-        list of str
+        list[str]
+            The list of valid values
 
         """
         response_data = self.sg.schema_field_read(entity, field_name)
@@ -141,30 +146,36 @@ class Konbini:
 
     def get_sg_projects(
             self,
-            project_id: Optional[int] = None,
+            project_id: Union[int, Set[int], List[int]] = None,
             custom_fields: Optional[List[str]] = None,
     ) -> List[SgProject]:
         """Get SG Projects
 
         Parameters
         ----------
-        project_id : int
+        project_id : int | set[int] | list[int]
             ShotGrid Project ID. Default None which retrieve all Projects
-        custom_fields : list[str]
+        custom_fields: list[str]
             List of custom fields
 
         Returns
         -------
-        list of SgProject
+        list[SgProject]
             List of SgProject or empty list if no results from ShotGrid
 
         """
         filters = []
         if project_id:
+            if isinstance(project_id, int):
+                project_id = [project_id]
+
+            if isinstance(project_id, set):
+                project_id = list(project_id)
+
             filters = [
                 [
                     "id",
-                    "is",
+                    "in",
                     project_id
                 ]
             ]
@@ -173,18 +184,27 @@ class Konbini:
         if custom_fields:
             fields = custom_fields
 
-        _projects: List[dict] = self.sg.find(SgEntity.PROJECT, filters, fields)
-        if not _projects:
-            return []
-
-        projects = []
-        for project in _projects:
-            sg_project = SgProject.from_dict(project)
-            projects.append(sg_project)
-
+        projects_: List[dict] = self.sg.find(SgEntity.PROJECT, filters, fields)
+        projects = [SgProject.from_dict(_) for _ in projects_]
         return projects
 
-    def create_sg_project(self, data: SgProject, **kwargs) -> Tuple[int, bool]:
+    def create_sg_project(self, data: SgProject, **kwargs) -> int:
+        """Create SG Project
+
+        Create SG Project entity. Refer to the data structure in Examples for
+        the bare minimum key values to successfully create a Project entity.
+
+        Parameters
+        ----------
+        data : SgProject
+            The SgProject data for create
+
+        Returns
+        -------
+        int
+            The created Project ID if successful or 0 if failed
+
+        """
         if not isinstance(data, SgProject):
             raise Exception("Data must be instance of SgProject!")
 
@@ -199,29 +219,34 @@ class Konbini:
 
             create_data["sg_status"] = data.sg_status
 
-        # Make sure it is str, bytes or os.PathLike object
+        # Note for devs, this is unique to Konbini, take care if you have a custom fields
+        # on SG for Project entity that happen to have the same field name as "image_upload"
         if data.image_upload:
+            # Make sure it is str, bytes or os.PathLike object
             create_data["image"] = data.image_upload,
 
         create_data.update(**kwargs)
-        is_created = True
-        sg_id = 0
 
+        created_id = 0
         try:
             response_data = self.sg.create(
                 entity_type=SgEntity.PROJECT,
                 data=create_data,
             )
-            sg_id = response_data["id"]
-            logger.info(f"SgProject {response_data['id']} successfully created")
-        except shotgun_api3.ShotgunError as e:
-            logger.error(f"Error creating SgProject for Project {data.name}: {e}")
-            is_created = False
+            created_id = response_data["id"]
+            logger.info(f"SgProject {created_id} successfully created")
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError, KeyError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to create SG Project",
+                    "error": e,
+                    "data": data,
+                }
+            )
         except Exception as e:
             logger.error(f"Unhandled exception when creating SgProject {data.name}: {e}")
-            is_created = False
 
-        return sg_id, is_created
+        return created_id
 
     def update_sg_project(self, data: SgProject, **kwargs) -> bool:
         """Update SG Project
@@ -248,7 +273,6 @@ class Konbini:
             if data.sg_status not in valid_values:
                 raise Exception(f"Invalid {data.sg_status} value! Valid values: {valid_values}")
 
-        is_updated = True
         data_ = data.to_dict()
 
         # Project start and end date is read only (only can be modified using Project Planning app on SG Web)
@@ -265,32 +289,32 @@ class Konbini:
 
         data_.update(**kwargs)
 
+        is_updated = False
         try:
             self.sg.update(
                 entity_type=SgEntity.PROJECT,
                 entity_id=data.id,
                 data=data_,
             )
+            is_updated = True
             logger.info(f"Update SgProject {data.id} successful")
         except shotgun_api3.ShotgunError as e:
             logger.error(f"Error updating SgProject {data.id}: {e}")
-            is_updated = False
         except Exception as e:
             logger.error(f"Unhandled exception when updating SgProject {data.id}: {e}")
-            is_updated = False
 
         return is_updated
 
     def get_sg_humanusers(
             self,
-            humanuser_id: Optional[int] = None,
+            humanuser_id: Optional[Union[int, Set[int], List[int]]] = None,
             custom_fields: Optional[List[str]] = None,
     ) -> List[SgHumanUser]:
         """Get SG HumanUsers
 
         Parameters
         ----------
-        humanuser_id : int
+        humanuser_id : int | Set[int] | List[int]
             ShotGrid HumanUser ID. Default None which retrieve all valid HumanUser
         custom_fields : list[str]
             List of custom fields
@@ -302,11 +326,17 @@ class Konbini:
 
         """
         filters = []
+        if isinstance(humanuser_id, int):
+            humanuser_id = [humanuser_id]
+
+        if isinstance(humanuser_id, set):
+            humanuser_id = list(humanuser_id)
+
         if humanuser_id:
             filters = [
                 [
                     "id",
-                    "is",
+                    "in",
                     humanuser_id
                 ]
             ]
@@ -315,15 +345,8 @@ class Konbini:
         if custom_fields:
             fields = custom_fields
 
-        _users: List[dict] = self.sg.find(SgEntity.HUMANUSER, filters, fields)
-        if not _users:
-            return []
-
-        users = []
-        for user in _users:
-            sg_humanuser = SgHumanUser.from_dict(user)
-            users.append(sg_humanuser)
-
+        users_: List[dict] = self.sg.find(SgEntity.HUMANUSER, filters, fields)
+        users = [SgHumanUser.from_dict(_) for _ in users_]
         return users
 
     def get_active_sg_humanusers(
@@ -366,7 +389,7 @@ class Konbini:
 
         return users
 
-    def create_sg_humanuser(self, data: SgHumanUser, **kwargs) -> dict:
+    def create_sg_humanuser(self, data: SgHumanUser, **kwargs) -> int:
         """Create SG HumanUser
 
         Create SG HumanUser entity. Refer to the data structure in Examples for
@@ -379,8 +402,8 @@ class Konbini:
 
         Returns
         -------
-        dict
-            Dict of is_created and the HumanUser data if created successfully
+        int
+            The HumanUser ID if successful or 0 if failed
 
         Examples
         --------
@@ -389,9 +412,6 @@ class Konbini:
         }
 
         """
-        is_created = True
-        response_data = {}
-
         if data.sg_status_list:
             valid_values = self.get_valid_values(SgEntity.HUMANUSER, "sg_status_list")
             if data.sg_status_list not in valid_values:
@@ -400,9 +420,12 @@ class Konbini:
         create_data = data.to_dict()
         create_data.update(**kwargs)
 
+        created_id = 0
         try:
             response_data = self.sg.create(SgEntity.HUMANUSER, create_data)
-        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            created_id = response_data["id"]
+            logger.info(f"SgHumanUser {response_data['id']} successfully created")
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError, KeyError) as e:
             logger.error(
                 {
                     "msg": "Fail to create SG HumanUser",
@@ -410,14 +433,10 @@ class Konbini:
                     "data": data,
                 }
             )
-            is_created = False
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgHumanUser {data.name}: {e}")
 
-        data = {
-            "is_created": is_created,
-        }
-        data.update(response_data)
-
-        return data
+        return created_id
 
     def update_sg_humanuser(self, data: SgHumanUser, **kwargs) -> bool:
         """Update SG HumanUser
@@ -467,18 +486,20 @@ class Konbini:
 
         return is_updated
 
+    # TODO: Maybe can consider delete_sg_humanuser but better to have an
+    #  actual person to manually delete the HumanUser from SG Web admin page
+
     def get_sg_bookings(
-            self,
-            humanuser_id: int = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        booking_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgBooking]:
         """Get SG Bookings
 
         Parameters
         ----------
-        humanuser_id : int
-            ShotGrid HumanUser ID. Default None which retrieve all
-            bookings for every valid HumanUser
+        booking_id : int | Set[int] | List[int]
+            ShotGrid Booking ID. Default None which retrieve all Bookings
         custom_fields: list[str]
             List of custom fields
 
@@ -489,17 +510,18 @@ class Konbini:
 
         """
         filters = []
-        if humanuser_id:
+        if booking_id:
+            if isinstance(booking_id, int):
+                booking_id = [booking_id]
+
+            if isinstance(booking_id, set):
+                booking_id = list(booking_id)
+
             filters = [
                 [
-                    "user",
-                    "is",
-                    [
-                        {
-                            "id": humanuser_id,
-                            "type": SgEntity.HUMANUSER,
-                        }
-                    ]
+                    "id",
+                    "in",
+                    booking_id,
                 ]
             ]
 
@@ -507,21 +529,60 @@ class Konbini:
         if custom_fields:
             fields = custom_fields
 
-        _bookings: List[dict] = self.sg.find(SgEntity.BOOKING, filters, fields)
-        if not _bookings:
-            return []
+        bookings_: List[dict] = self.sg.find(SgEntity.BOOKING, filters, fields)
+        bookings = [SgBooking.from_dict(_) for _ in bookings_]
+        return bookings
 
-        bookings = []
-        for booking in _bookings:
-            sg_booking = SgBooking.from_dict(booking)
-            bookings.append(sg_booking)
+    def get_sg_bookings_by_user(
+            self,
+            humanuser_id: Union[int, Set[int], List[int]],
+            custom_fields: Optional[List[str]] = None,
+    ) -> List[SgBooking]:
+        """Get SG Bookings
 
+        Parameters
+        ----------
+        humanuser_id : int | Set[int] | List[int]
+            ShotGrid HumanUser ID
+        custom_fields: list[str]
+            List of custom fields
+
+        Returns
+        -------
+        list[SgBooking]
+            List of SgBooking or empty list if no results from ShotGrid
+
+        """
+        if isinstance(humanuser_id, int):
+            humanuser_id = [humanuser_id]
+
+        if isinstance(humanuser_id, set):
+            humanuser_id = list(humanuser_id)
+
+        users = [
+            {"id": _, "type": SgEntity.HUMANUSER}
+            for _ in humanuser_id
+        ]
+        filters = [
+            [
+                "user",
+                "in",
+                users,
+            ]
+        ]
+
+        fields = BOOKING_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        bookings_: List[dict] = self.sg.find(SgEntity.BOOKING, filters, fields)
+        bookings = [SgBooking.from_dict(_) for _ in bookings_]
         return bookings
 
     def get_sg_bookings_by_year(
             self,
             year: int,
-            humanuser_id: int = None,
+            humanuser_id: Optional[int | Set[int] | List[int]] = None,
             custom_fields: Optional[List[str]] = None,
     ) -> List[SgBooking]:
         """Get SG Bookings by Year
@@ -530,7 +591,7 @@ class Konbini:
         ----------
         year : int
             Calendar year
-        humanuser_id : int
+        humanuser_id : int | Set[int] | List[int]
             ShotGrid HumanUser ID. Default None which retrieve all
             bookings for every valid HumanUser
         custom_fields: list[str]
@@ -556,16 +617,21 @@ class Konbini:
             ]
         ]
         if humanuser_id:
+            if isinstance(humanuser_id, int):
+                humanuser_id = [humanuser_id]
+
+            if isinstance(humanuser_id, set):
+                humanuser_id = list(humanuser_id)
+
+            users = [
+                {"id": _, "type": SgEntity.HUMANUSER}
+                for _ in humanuser_id
+            ]
             filters.append(
                 [
                     "user",
-                    "is",
-                    [
-                        {
-                            "id": humanuser_id,
-                            "type": SgEntity.HUMANUSER,
-                        }
-                    ]
+                    "in",
+                    users,
                 ]
             )
 
@@ -580,22 +646,15 @@ class Konbini:
             }
         ]
 
-        _bookings: List[dict] = self.sg.find(SgEntity.BOOKING, filters, fields, order=order)
-        if not _bookings:
-            return []
-
-        bookings = []
-        for booking in _bookings:
-            sg_booking = SgBooking.from_dict(booking)
-            bookings.append(sg_booking)
-
+        bookings_: List[dict] = self.sg.find(SgEntity.BOOKING, filters, fields, order=order)
+        bookings = [SgBooking.from_dict(_) for _ in bookings_]
         return bookings
 
     def get_sg_bookings_by_month_year(
             self,
             month: int,
             year: int,
-            humanuser_id: int = None,
+            humanuser_id: Optional[Union[int, Set[int], List[int]]] = None,
             custom_fields: Optional[List[str]] = None,
     ) -> List[SgBooking]:
         """Get SG Bookings by Month Year
@@ -606,7 +665,7 @@ class Konbini:
             Calendar month
         year : int
             Calendar year
-        humanuser_id : int
+        humanuser_id : int | Set[int] | List[int]
             ShotGrid HumanUser ID. Default None which retrieve all
             bookings for every valid HumanUser
         custom_fields: list[str]
@@ -654,16 +713,21 @@ class Konbini:
             ]
 
         if humanuser_id:
+            if isinstance(humanuser_id, int):
+                humanuser_id = [humanuser_id]
+
+            if isinstance(humanuser_id, set):
+                humanuser_id = list(humanuser_id)
+
+            users = [
+                {"id": _, "type": SgEntity.HUMANUSER}
+                for _ in humanuser_id
+            ]
             filters.append(
                 [
                     "user",
-                    "is",
-                    [
-                        {
-                            "id": humanuser_id,
-                            "type": SgEntity.HUMANUSER,
-                        }
-                    ]
+                    "in",
+                    users,
                 ]
             )
 
@@ -678,22 +742,22 @@ class Konbini:
             }
         ]
 
-        _bookings: List[dict] = self.sg.find(SgEntity.BOOKING, filters, fields, order=order)
-        if not _bookings:
+        bookings_: List[dict] = self.sg.find(SgEntity.BOOKING, filters, fields, order=order)
+        if not bookings_:
             return []
 
         bookings = []
-        for booking in _bookings:
+        for booking in bookings_:
             sg_booking = SgBooking.from_dict(booking)
-            _booking_dt = datetime.datetime.strptime(sg_booking.start_date, SG_DATE_FORMAT)
-            if _booking_dt.month != month or _booking_dt.year != year:
+            booking_dt = datetime.datetime.strptime(sg_booking.start_date, SG_DATE_FORMAT)
+            if booking_dt.month != month or booking_dt.year != year:
                 continue
 
             bookings.append(sg_booking)
 
         return bookings
 
-    def create_sg_booking(self, data: SgBooking, **kwargs) -> dict:
+    def create_sg_booking(self, data: SgBooking, **kwargs) -> int:
         """Create SG Booking
         
         Create SG Booking entity. Refer to the data structure in Examples for
@@ -706,8 +770,9 @@ class Konbini:
         
         Returns
         -------
-        dict
-        
+        int
+            The Booking ID if successful or 0 if failed
+
         Examples
         --------
         start_date/end_date : YYYY-MM-DD in string format
@@ -724,9 +789,6 @@ class Konbini:
             }
             
         """
-        is_created = True
-        response_data = {}
-
         if data.sg_status_list:
             valid_values = self.get_valid_values(SgEntity.BOOKING, "sg_status_list")
             if data.sg_status_list not in valid_values:
@@ -743,9 +805,12 @@ class Konbini:
         )
         create_data.update(**kwargs)
 
+        created_id = 0
         try:
             response_data = self.sg.create(SgEntity.BOOKING, create_data)
-        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            created_id = response_data["id"]
+            logger.info(f"SgBooking {created_id} successfully created")
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError, KeyError) as e:
             logger.error(
                 {
                     "msg": "Fail to create SG Booking",
@@ -753,23 +818,61 @@ class Konbini:
                     "data": data,
                 }
             )
-            is_created = False
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgBooking: {e}")
 
-        data = {
-            "is_created": is_created,
-        }
-        data.update(response_data)
+        return created_id
 
-        return data
+    def update_sg_booking(self, data: SgBooking, **kwargs) -> bool:
+        """Update SG Booking
 
-    def delete_sg_booking(self, sg_booking_id: int) -> bool:
+        Parameters
+        ----------
+        data : SgBooking
+            The SgBooking data for update
+
+        Returns
+        -------
+        bool
+            True if update successfully
+
+        """
+        if not isinstance(data, SgBooking):
+            raise Exception("Data must be instance of SgBooking!")
+
+        if not data.id:
+            raise Exception("No SgBooking ID found!")
+
+        if data.sg_status_list:
+            valid_values = self.get_valid_values(SgEntity.BOOKING, "sg_status_list")
+            if data.sg_status_list not in valid_values:
+                raise Exception(f"Invalid {data.sg_status_list} value! Valid values: {valid_values}")
+
+        is_updated = True
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        try:
+            self.sg.update(
+                entity_type=SgEntity.BOOKING,
+                entity_id=data.id,
+                data=data_,
+            )
+            logger.info(f"Update Booking {data.id} successful")
+        except shotgun_api3.ShotgunError as e:
+            logger.error(f"Error updating Booking {data.id}: {e}")
+            is_updated = False
+
+        return is_updated
+
+    def delete_sg_booking(self, booking_id: int) -> bool:
         """Delete SG Booking
 
         Delete SG Booking entity.
 
         Parameters
         ----------
-        sg_booking_id : int
+        booking_id : int
             The SG Booking ID for delete
 
         Returns
@@ -780,18 +883,18 @@ class Konbini:
         """
         is_deleted = False
         try:
-            is_deleted = self.sg.delete(SgEntity.BOOKING, sg_booking_id)
+            is_deleted = self.sg.delete(SgEntity.BOOKING, booking_id)
         except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
             logger.error(
                 {
-                    "msg": f"Fail to delete SG Booking ID {sg_booking_id}",
+                    "msg": f"Fail to delete SG Booking ID {booking_id}",
                     "error": e,
                 }
             )
 
         return is_deleted
 
-    def create_sg_note(self, data: SgNote, **kwargs) -> dict:
+    def create_sg_note(self, data: SgNote, **kwargs) -> int:
         """Create SG Note
 
         Create SG Note entity. Refer to the data structure in Examples for
@@ -808,7 +911,8 @@ class Konbini:
 
         Returns
         -------
-        dict
+        int
+            The Note ID if successful or 0 if failed
 
         Examples
         --------
@@ -838,9 +942,6 @@ class Konbini:
         }
 
         """
-        is_created = True
-        response_data = {}
-
         if data.project is None:
             raise Exception(f"Project is required!")
 
@@ -871,9 +972,12 @@ class Konbini:
         )
         create_data.update(**kwargs)
 
+        created_id = 0
         try:
             response_data = self.sg.create(SgEntity.NOTE, create_data)
-        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            created_id = response_data["id"]
+            logger.info(f"SgNote {created_id} successfully created")
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError, KeyError) as e:
             logger.error(
                 {
                     "msg": "Fail to create SG Note",
@@ -881,17 +985,57 @@ class Konbini:
                     "data": data,
                 }
             )
-            is_created = False
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgNote: {e}")
 
-        data = {
-            "is_created": is_created,
-        }
-        data.update(response_data)
+        return created_id
 
-        return data
+    def get_sg_notes(
+            self,
+            note_id: Union[int, Set[int], List[int]] = None,
+            custom_fields: Optional[List[str]] = None,
+    ) -> List[SgVersion]:
+        """Get SG Versions
 
-    def get_sg_notes(self, entity_id: int, entity_type: str) -> List[SgNote]:
-        """Get SG Notes
+        Parameters
+        ----------
+        note_id : int | set[int] | list[int]
+            ShotGrid Note ID. Default None which retrieves all notes
+        custom_fields: list[str]
+            Optional. List of valid fields for SG Note.
+
+        Returns
+        -------
+        list[SgNote]
+            List of SgNote or empty list if no results from ShotGrid
+
+        """
+        filters = []
+        if note_id:
+            if isinstance(note_id, int):
+                note_id = [note_id]
+
+            if isinstance(note_id, set):
+                note_id = list(note_id)
+
+            filters = [
+                [
+                    "id",
+                    "in",
+                    note_id
+                ]
+            ]
+
+        fields = NOTE_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        notes_: List[dict] = self.sg.find(SgEntity.NOTE, filters, fields)
+        notes = [SgNote.from_dict(t) for t in notes_]
+        return notes
+
+    def get_sg_notes_by_entity(self, entity_id: int, entity_type: str) -> List[SgNote]:
+        """Get SG Notes by entity
 
         Parameters
         ----------
@@ -996,40 +1140,40 @@ class Konbini:
 
     def get_sg_assets(
             self,
-            assets_id: Union[int, Set[int], List[int]],
+            asset_id: Union[int, Set[int], List[int]] = None,
             custom_fields: Optional[List[str]] = None,
     ) -> List[SgAsset]:
         """Get SG Assets
 
         Parameters
         ----------
+        asset_id : int | set[int] | list[int]
+            ShotGrid Asset ID. Default None which retrieve all Assets
         custom_fields: list[str]
-        assets_id : int | set[int] | list[int]
-            ShotGrid Asset ID.
+            List of custom fields
 
         Returns
         -------
-        list of SgAsset
+        list[SgAsset]
             List of SgAsset or empty list if no results from ShotGrid
 
-        Notes
-        -----
-        If content is 'Idle' or 'Report', the entity value will be None
-
         """
-        if isinstance(assets_id, int):
-            assets_id = [assets_id]
+        filters = []
+        if asset_id:
+            if isinstance(asset_id, int):
+                asset_id = [asset_id]
 
-        if isinstance(assets_id, set):
-            assets_id = list(assets_id)
+            if isinstance(asset_id, set):
+                asset_id = list(asset_id)
 
-        filters = [
-            [
-                "id",
-                "in",
-                assets_id
+            filters = [
+                [
+                    "id",
+                    "in",
+                    asset_id
+                ]
             ]
-        ]
+
         fields = ASSET_FIELDS
         if custom_fields:
             fields = custom_fields
@@ -1038,6 +1182,152 @@ class Konbini:
         assets_: List[dict] = self.sg.find(SgEntity.ASSET, filters, fields)
         assets = [SgAsset.from_dict(t) for t in assets_]
         return assets
+
+    def create_sg_asset(self, data: SgAsset, **kwargs) -> int:
+        """Create SG Asset
+
+        Create SG Asset entity. Refer to the data structure in Examples for
+        the bare minimum key values to successfully create a Asset entity.
+
+        Parameters
+        ----------
+        data : SgTask
+            The SG Asset data for create
+
+        Returns
+        -------
+        int
+            The created Asset ID if successful or 0 if failed
+
+        Examples
+        --------
+        Content: Valid string format
+            {
+                "project": {
+                    "id": 280,
+                    "type": "Project"
+                },
+                "code": "Report",
+                "task_assignees": [
+                    {
+                        "id": 970,
+                        "type": SgEntity.HUMANUSER
+                    }
+                ],
+            }
+
+        """
+        if data.sg_status_list:
+            valid_values = self.get_valid_values(SgEntity.ASSET, "sg_status_list")
+            if data.sg_status_list not in valid_values:
+                raise Exception(f"Invalid {data.sg_status_list} value! Valid values: {valid_values}")
+
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        created_id = 0
+        try:
+            response_data = self.sg.create(SgEntity.ASSET, data_)
+            created_id = response_data["id"]
+            logger.info(f"SgAsset {created_id} successfully created")
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to create SG Asset",
+                    "error": e,
+                    "data": data,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgAsset {data.code}: {e}")
+
+        return created_id
+
+    def update_sg_asset(self, data: SgAsset, **kwargs) -> bool:
+        """Update SG Asset
+
+        Parameters
+        ----------
+        data : SgAsset
+            The SgAsset data for update
+
+        Returns
+        -------
+        bool
+            True if update successfully
+
+        """
+        if not isinstance(data, SgAsset):
+            raise Exception("Data must be instance of SgBooking!")
+
+        if not data.id:
+            raise Exception("No SgAsset ID found!")
+
+        if data.sg_status_list:
+            valid_values = self.get_valid_values(SgEntity.ASSET, "sg_status_list")
+            if data.sg_status_list not in valid_values:
+                raise Exception(f"Invalid {data.sg_status_list} value! Valid values: {valid_values}")
+
+        is_updated = True
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        try:
+            self.sg.update(
+                entity_type=SgEntity.ASSET,
+                entity_id=data.id,
+                data=data_,
+            )
+            logger.info(f"Update Asset {data.id} successful")
+        except shotgun_api3.ShotgunError as e:
+            logger.error(f"Error updating Asset {data.id}: {e}")
+            is_updated = False
+
+        return is_updated
+
+    def get_sg_shots(
+            self,
+            shot_id: Union[int, Set[int], List[int]] = None,
+            custom_fields: Optional[List[str]] = None,
+    ) -> List[SgShot]:
+        """Get SG Shots
+
+        Parameters
+        ----------
+        shot_id : int | set[int] | list[int]
+            ShotGrid Project ID. Default None which retrieve all Shots
+        custom_fields: list[str]
+            List of custom fields
+
+        Returns
+        -------
+        list[SgTask]
+            List of SgShot or empty list if no results from ShotGrid
+
+        """
+        filters = []
+        if shot_id:
+            if isinstance(shot_id, int):
+                shot_id = [shot_id]
+
+            if isinstance(shot_id, set):
+                shot_id = list(shot_id)
+
+            filters = [
+                [
+                    "id",
+                    "in",
+                    shot_id
+                ]
+            ]
+
+        fields = SHOT_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        shots_: List[dict] = self.sg.find(SgEntity.SHOT, filters, fields)
+        shots = [SgProject.from_dict(_) for _ in shots_]
+        return shots
 
     def get_sg_shots_by_project(
             self,
@@ -1081,20 +1371,21 @@ class Konbini:
 
     def get_sg_tasks(
             self,
-            tasks_id: Union[int, Set[int], List[int]],
+            task_id: Union[int, Set[int], List[int]] = None,
             custom_fields: Optional[List[str]] = None,
     ) -> List[SgTask]:
         """Get SG Tasks
 
         Parameters
         ----------
+        task_id : int | set[int] | list[int]
+            ShotGrid Task ID. Default None which retrieve all Tasks
         custom_fields: list[str]
-        tasks_id : int | set[int] | list[int]
-            ShotGrid Task ID.
+            List of custom fields
 
         Returns
         -------
-        list of SgTask
+        list[SgTask]
             List of SgTask or empty list if no results from ShotGrid
 
         Notes
@@ -1102,19 +1393,22 @@ class Konbini:
         If content is 'Idle' or 'Report', the entity value will be None
 
         """
-        if isinstance(tasks_id, int):
-            tasks_id = [tasks_id]
+        filters = []
+        if task_id:
+            if isinstance(task_id, int):
+                task_id = [task_id]
 
-        if isinstance(tasks_id, set):
-            tasks_id = list(tasks_id)
+            if isinstance(task_id, set):
+                task_id = list(task_id)
 
-        filters = [
-            [
-                "id",
-                "in",
-                tasks_id
+            filters = [
+                [
+                    "id",
+                    "in",
+                    task_id
+                ]
             ]
-        ]
+
         fields = TASK_FIELDS
         if custom_fields:
             fields = custom_fields
@@ -1124,7 +1418,7 @@ class Konbini:
         tasks = [SgTask.from_dict(t) for t in tasks_]
         return tasks
 
-    def create_sg_task(self, data: SgTask, **kwargs) -> bool:
+    def create_sg_task(self, data: SgTask, **kwargs) -> int:
         """Create SG Task
 
         Create SG Task entity. Refer to the data structure in Examples for
@@ -1137,8 +1431,8 @@ class Konbini:
 
         Returns
         -------
-        bool
-            True if created successfully
+        int
+            The created Task ID if successful or 0 if failed
 
         Examples
         --------
@@ -1158,7 +1452,6 @@ class Konbini:
             }
 
         """
-        is_created = True
         if data.sg_status_list:
             valid_values = self.get_valid_values(SgEntity.TASK, "sg_status_list")
             if data.sg_status_list not in valid_values:
@@ -1167,8 +1460,11 @@ class Konbini:
         data_ = data.to_dict()
         data_.update(**kwargs)
 
+        created_id = 0
         try:
-            self.sg.create("Task", data_)
+            response_data = self.sg.create(SgEntity.TASK, data_)
+            created_id = response_data["id"]
+            logger.info(f"SgTask {created_id} successfully created")
         except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
             logger.error(
                 {
@@ -1177,20 +1473,63 @@ class Konbini:
                     "data": data,
                 }
             )
-            is_created = False
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgTask {data.name}: {e}")
 
-        return is_created
+        return created_id
+
+    def update_sg_task(self, data: SgTask, **kwargs) -> bool:
+        """Update SG Task
+
+        Parameters
+        ----------
+        data : SgTask
+            The SgTask data for update
+
+        Returns
+        -------
+        bool
+            True if update successfully
+
+        """
+        if not isinstance(data, SgTask):
+            raise Exception("Data must be instance of SgBooking!")
+
+        if not data.id:
+            raise Exception("No SgTask ID found!")
+
+        if data.sg_status_list:
+            valid_values = self.get_valid_values(SgEntity.TASK, "sg_status_list")
+            if data.sg_status_list not in valid_values:
+                raise Exception(f"Invalid {data.sg_status_list} value! Valid values: {valid_values}")
+
+        is_updated = True
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        try:
+            self.sg.update(
+                entity_type=SgEntity.TASK,
+                entity_id=data.id,
+                data=data_,
+            )
+            logger.info(f"Update Task {data.id} successful")
+        except shotgun_api3.ShotgunError as e:
+            logger.error(f"Error updating Task {data.id}: {e}")
+            is_updated = False
+
+        return is_updated
 
     def bulk_update_sg_task_status(
             self,
-            task_ids: List[int],
+            task_id: List[int],
             status: str,
     ) -> bool:
         """Bulk Update SG Task Status
 
         Parameters
         ----------
-        task_ids : list[int]
+        task_id : list[int]
             List of Task IDs for bulk update
         status : str
             The status name
@@ -1206,10 +1545,10 @@ class Konbini:
             raise Exception(f"Invalid {status} value! Valid values: {valid_values}")
 
         batch_data = []
-        for task_id in task_ids:
+        for _id in task_id:
             request_data = {
                 "request_type": "update",
-                "entity_id": task_id,
+                "entity_id": _id,
                 "entity_type": SgEntity.TASK,
                 "data": {
                     "sg_status_list": status
@@ -1226,7 +1565,7 @@ class Konbini:
                 {
                     "msg": "Unexpected error in bulk updating tasks status",
                     "error": e,
-                    "task ids": task_ids,
+                    "task_id": task_id,
                 }
             )
             is_bulk_updated = False
@@ -1235,41 +1574,40 @@ class Konbini:
 
     def get_sg_versions(
             self,
-            versions_id: Union[int, Set[int], List[int]],
+            version_id: Union[int, Set[int], List[int]] = None,
             custom_fields: Optional[List[str]] = None,
     ) -> List[SgVersion]:
         """Get SG Versions
 
         Parameters
         ----------
+        version_id : int | set[int] | list[int]
+            ShotGrid Version ID. Default None which retrieve all Versions
         custom_fields: list[str]
             Optional. List of valid fields for SG Version.
-        versions_id : int | set[int] | list[int]
-            ShotGrid Version ID.
 
         Returns
         -------
-        list of SgVersion
+        list[SgVersion]
             List of SgVersion or empty list if no results from ShotGrid
 
-        Notes
-        -----
-        If content is 'Idle' or 'Report', the entity value will be None
-
         """
-        if isinstance(versions_id, int):
-            versions_id = [versions_id]
+        filters = []
+        if version_id:
+            if isinstance(version_id, int):
+                version_id = [version_id]
 
-        if isinstance(versions_id, set):
-            versions_id = list(versions_id)
+            if isinstance(version_id, set):
+                version_id = list(version_id)
 
-        filters = [
-            [
-                "id",
-                "in",
-                versions_id
+            filters = [
+                [
+                    "id",
+                    "in",
+                    version_id
+                ]
             ]
-        ]
+
         fields = VERSION_FIELDS
         if custom_fields:
             fields = custom_fields
@@ -1318,44 +1656,94 @@ class Konbini:
 
     def get_sg_timelogs(
             self,
-            sg_humanuser_id: int,
+            timelog_id: Union[int, Set[int], List[int]] = None,
             custom_fields: Optional[List[str]] = None,
     ) -> List[dict]:
         """Get SG Timelogs
 
         Parameters
         ----------
-        sg_humanuser_id : int
-            The SG Humanuser ID
+        timelog_id : int | set[int] | list[int]
+            The SG Timelog ID. Default None which retrieve all TimeLogs
         custom_fields : list[str]
             List of custom fields
 
         Returns
         -------
-        list[dict]
-            List of Timelog dict
+        list[SgTimeLog]
+            List of SgTimeLog or empty list if no results from ShotGrid
 
         """
+        filters = []
+        if timelog_id:
+            if isinstance(timelog_id, int):
+                timelog_id = [timelog_id]
+
+            if isinstance(timelog_id, set):
+                timelog_id = list(timelog_id)
+
+            filters = [
+                [
+                    "id",
+                    "in",
+                    timelog_id,
+                ]
+            ]
+
+        fields = TIMELOG_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        timelogs_ = self.sg.find(SgEntity.TIMELOG, filters, fields)
+        timelogs = [SgTimeLog.from_dict(t) for t in timelogs_]
+        return timelogs
+
+    def get_sg_timelogs_by_user(
+            self,
+            humanuser_id: Union[int, Set[int], List[int]],
+            custom_fields: Optional[List[str]] = None,
+    ) -> List[dict]:
+        """Get SG Timelogs
+
+        Parameters
+        ----------
+        humanuser_id : int | set[int] | list[int]
+            The SG HumanUser ID
+        custom_fields : list[str]
+            List of custom fields
+
+        Returns
+        -------
+        list[SgTimeLog]
+            List of SgTimeLog or empty list if no results from ShotGrid
+
+        """
+        if isinstance(humanuser_id, int):
+            humanuser_id = [humanuser_id]
+
+        if isinstance(humanuser_id, set):
+            humanuser_id = list(humanuser_id)
+
+        users = [
+            {"id": _, "type": SgEntity.HUMANUSER}
+            for _ in humanuser_id
+        ]
         filters = [
             [
                 "user",
-                "is",
-                [
-                    {
-                        "id": sg_humanuser_id,
-                        "type": SgEntity.HUMANUSER,
-                    }
-                ]
+                "in",
+                users,
             ]
         ]
         fields = TIMELOG_FIELDS
         if custom_fields:
             fields = custom_fields
 
-        timelogs = self.sg.find(SgEntity.TIMELOG, filters, fields)
+        timelogs_ = self.sg.find(SgEntity.TIMELOG, filters, fields)
+        timelogs = [SgTimeLog.from_dict(t) for t in timelogs_]
         return timelogs
 
-    def create_sg_timelog(self, data: SgTimeLog, **kwargs) -> dict:
+    def create_sg_timelog(self, data: SgTimeLog, **kwargs) -> int:
         """Create SG TimeLog
 
         Create SG TimeLog entity. Refer to the data structure in Examples for
@@ -1368,7 +1756,8 @@ class Konbini:
 
         Returns
         -------
-        dict
+        int
+            The created Timelog ID if successful or 0 if failed
 
         Examples
         --------
@@ -1395,27 +1784,24 @@ class Konbini:
         """
         data_ = data.to_dict()
         data_.update(**kwargs)
-        is_created = True
-        response_data = {}
 
+        created_id = 0
         try:
-            response_data = self.sg.create("TimeLog", data_)
+            response_data = self.sg.create(SgEntity.TIMELOG, data_)
+            created_id = response_data["id"]
+            logger.info(f"SgTimeLog {created_id} successfully created")
         except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
             logger.error(
                 {
-                    "msg": "Fail to create SG timelog",
+                    "msg": "Fail to create SG Timelog",
                     "error": e,
                     "data": data,
                 }
             )
-            is_created = False
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgTimeLog: {e}")
 
-        data = {
-            "is_created": is_created,
-        }
-        data.update(response_data)
-
-        return data
+        return created_id
 
     def bulk_create_sg_timelog(self, batch_data: List[dict]) -> List[dict]:
         """Bulk Create Timelog
@@ -1485,14 +1871,14 @@ class Konbini:
 
         return is_successful_update
 
-    def delete_sg_timelog(self, sg_timelog_id: int) -> bool:
+    def delete_sg_timelog(self, timelog_id: int) -> bool:
         """Delete SG TimeLog
 
         Delete SG TimeLog entity.
 
         Parameters
         ----------
-        sg_timelog_id : int
+        timelog_id : int
             The SG TimeLog ID for delete
 
         Returns
@@ -1502,21 +1888,21 @@ class Konbini:
 
         """
         try:
-            is_deleted = self.sg.delete(SgEntity.TIMELOG, sg_timelog_id)
+            is_deleted = self.sg.delete(SgEntity.TIMELOG, timelog_id)
         except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
-            logger.warning(f"Error deleting Timelog {sg_timelog_id}: {e}")
+            logger.warning(f"Error deleting Timelog {timelog_id}: {e}")
             is_deleted = False
 
         return is_deleted
 
-    def bulk_delete_sg_timelog(self, sg_timelog_ids: List[int]) -> bool:
+    def bulk_delete_sg_timelog(self, timelog_id: Union[int, List[int]]) -> bool:
         """Bulk Delete Timelog
 
         Bulk delete SG TimeLog entities.
 
         Parameters
         ----------
-        sg_timelog_ids : list[int]
+        timelog_id : int | list[int]
             List of SG TimeLog ID for bulk delete
 
         Returns
@@ -1525,11 +1911,12 @@ class Konbini:
             True if bulk delete successfully
 
         """
+        timelog_ids = list(timelog_id)
         batch_data = []
-        for sg_timelog_id in sg_timelog_ids:
+        for _id in timelog_ids:
             request_data = {
                 "request_type": "delete",
-                "entity_id": sg_timelog_id,
+                "entity_id": _id,
                 "entity_type": SgEntity.TIMELOG,
             }
             batch_data.append(request_data)
@@ -1543,7 +1930,7 @@ class Konbini:
                 {
                     "msg": " Unexpected error in bulk deleting timelog",
                     "error": e,
-                    "task ids": sg_timelog_ids,
+                    "timelog_ids": timelog_ids,
                 }
             )
             is_bulk_delete_timelog_successful = False
@@ -1552,30 +1939,36 @@ class Konbini:
 
     def get_sg_attachments(
             self,
-            attachment_id: Optional[int] = None,
+            attachment_id: Optional[Union[int, Set[int], List[int]]] = None,
             custom_fields: Optional[List[str]] = None,
     ) -> List[SgAttachment]:
         """Get SG Attachments
 
         Parameters
         ----------
-        attachment_id : int
+        attachment_id : int | set[int] | list[int]
             ShotGrid Attachment ID. Default None which retrieve all Attachments
         custom_fields : list[str]
             List of custom fields
 
         Returns
         -------
-        list of SgAttachment
+        list[SgAttachment]
             List of SgAttachment or empty list if no results from ShotGrid
 
         """
         filters = []
         if attachment_id:
+            if isinstance(attachment_id, int):
+                attachment_id = [attachment_id]
+
+            if isinstance(attachment_id, set):
+                attachment_id = list(attachment_id)
+
             filters = [
                 [
                     "id",
-                    "is",
+                    "in",
                     attachment_id
                 ]
             ]
@@ -1584,15 +1977,8 @@ class Konbini:
         if custom_fields:
             fields = custom_fields
 
-        _attachments: List[dict] = self.sg.find(SgEntity.ATTACHMENT, filters, fields)
-        if not _attachments:
-            return []
-
-        attachments = []
-        for attachment in _attachments:
-            sg_attachment = SgAttachment.from_dict(attachment)
-            attachments.append(sg_attachment)
-
+        attachments_: List[dict] = self.sg.find(SgEntity.ATTACHMENT, filters, fields)
+        attachments = [SgAttachment.from_dict(_) for _ in attachments_]
         return attachments
 
     def upload_attachment(
