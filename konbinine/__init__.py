@@ -1187,7 +1187,7 @@ class Konbini:
         """Create SG Asset
 
         Create SG Asset entity. Refer to the data structure in Examples for
-        the bare minimum key values to successfully create a Asset entity.
+        the bare minimum key values to successfully create Asset entity.
 
         Parameters
         ----------
@@ -1204,16 +1204,10 @@ class Konbini:
         Content: Valid string format
             {
                 "project": {
-                    "id": 280,
+                    "id": 551,
                     "type": "Project"
                 },
-                "code": "Report",
-                "task_assignees": [
-                    {
-                        "id": 970,
-                        "type": SgEntity.HUMANUSER
-                    }
-                ],
+                "code": "BentoA",
             }
 
         """
@@ -1369,6 +1363,101 @@ class Konbini:
         shots = [SgShot.from_dict(s) for s in shots_]
         return shots
 
+    def create_sg_shot(self, data: SgShot, **kwargs) -> int:
+        """Create SG Shot
+
+        Create SG Shot entity. Refer to the data structure in Examples for
+        the bare minimum key values to successfully create Shot entity.
+
+        Parameters
+        ----------
+        data : SgShot
+            The SG Shot data for create
+
+        Returns
+        -------
+        int
+            The created Shot ID if successful or 0 if failed
+
+        Examples
+        --------
+        Content: Valid string format
+            {
+                "project": {
+                    "id": 551,
+                    "type": "Project"
+                },
+                "code": "014_003",
+            }
+        """
+        if data.sg_status_list:
+            valid_values = self.get_valid_values(SgEntity.SHOT, "sg_status_list")
+            if data.sg_status_list not in valid_values:
+                raise Exception(f"Invalid {data.sg_status_list} value! Valid values: {valid_values}")
+
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        created_id = 0
+        try:
+            response_data = self.sg.create(SgEntity.SHOT, data_)
+            created_id = response_data["id"]
+            logger.info(f"SgShot {created_id} successfully created")
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to create SG Shot",
+                    "error": e,
+                    "data": data,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgShot {data.code}: {e}")
+
+        return created_id
+
+    def update_sg_shot(self, data: SgShot, **kwargs) -> bool:
+        """Update SG Shot
+
+        Parameters
+        ----------
+        data : SgShot
+            The SgShot data for update
+
+        Returns
+        -------
+        bool
+            True if update successfully
+
+        """
+        if not isinstance(data, SgShot):
+            raise Exception("Data must be instance of SgShot!")
+
+        if not data.id:
+            raise Exception("No SgShot ID found!")
+
+        if data.sg_status_list:
+            valid_values = self.get_valid_values(SgEntity.SHOT, "sg_status_list")
+            if data.sg_status_list not in valid_values:
+                raise Exception(f"Invalid {data.sg_status_list} value! Valid values: {valid_values}")
+
+        is_updated = True
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        try:
+            self.sg.update(
+                entity_type=SgEntity.SHOT,
+                entity_id=data.id,
+                data=data_,
+            )
+            logger.info(f"Update Shot {data.id} successful")
+        except shotgun_api3.ShotgunError as e:
+            logger.error(f"Error updating Shot {data.id}: {e}")
+            is_updated = False
+
+        return is_updated
+
     def get_sg_tasks(
             self,
             task_id: Union[int, Set[int], List[int]] = None,
@@ -1439,7 +1528,7 @@ class Konbini:
         Content: Valid string format
             {
                 "project": {
-                    "id": 280,
+                    "id": 551,
                     "type": "Project"
                 },
                 "content": "Report",
