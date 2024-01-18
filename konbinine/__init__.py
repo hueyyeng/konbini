@@ -1706,6 +1706,66 @@ class Konbini:
         versions = [SgVersion.from_dict(t) for t in versions_]
         return versions
 
+    def create_sg_version(self, data: SgVersion, **kwargs) -> int:
+        """Create SG Version
+
+        Create SG Version entity. Refer to the data structure in Examples for
+        the bare minimum key values to successfully create a Version entity.
+
+        Parameters
+        ----------
+        data : SgVersion
+            The SG Task data for create
+
+        Returns
+        -------
+        int
+            The created Version ID if successful or 0 if failed
+
+        Examples
+        --------
+        Content: Valid string format
+            {
+                "project": {
+                    "id": 551,
+                    "type": "Project"
+                },
+                "code": "Report",
+                "entity": [
+                    {
+                        "id": 2042,
+                        "type": SgEntity.ASSET
+                    }
+                ],
+            }
+
+        """
+        if data.sg_status_list:
+            valid_values = self.get_valid_values(SgEntity.VERSION, "sg_status_list")
+            if data.sg_status_list not in valid_values:
+                raise Exception(f"Invalid {data.sg_status_list} value! Valid values: {valid_values}")
+
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        created_id = 0
+        try:
+            response_data = self.sg.create(SgEntity.VERSION, data_)
+            created_id = response_data["id"]
+            logger.info(f"SgVersion {created_id} successfully created")
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to create SG Version",
+                    "error": e,
+                    "data": data,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgVersion {data.code}: {e}")
+
+        return created_id
+
     def update_sg_version(self, data: SgVersion, **kwargs) -> bool:
         """Update SG Version
 
