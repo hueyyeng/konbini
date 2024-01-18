@@ -1,4 +1,4 @@
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 import calendar
 import datetime
@@ -994,8 +994,8 @@ class Konbini:
             self,
             note_id: Union[int, Set[int], List[int]] = None,
             custom_fields: Optional[List[str]] = None,
-    ) -> List[SgVersion]:
-        """Get SG Versions
+    ) -> List[SgNote]:
+        """Get SG Notes
 
         Parameters
         ----------
@@ -1252,7 +1252,7 @@ class Konbini:
 
         """
         if not isinstance(data, SgAsset):
-            raise Exception("Data must be instance of SgBooking!")
+            raise Exception("Data must be instance of SgAsset!")
 
         if not data.id:
             raise Exception("No SgAsset ID found!")
@@ -1582,7 +1582,7 @@ class Konbini:
 
         """
         if not isinstance(data, SgTask):
-            raise Exception("Data must be instance of SgBooking!")
+            raise Exception("Data must be instance of SgTask!")
 
         if not data.id:
             raise Exception("No SgTask ID found!")
