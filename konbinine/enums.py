@@ -22,6 +22,7 @@ class SgEntity:
     PROJECT = "Project"
     PUBLISHEDFILE = "PublishedFile"
     PUBLISHEDFILETYPE = "PublishedFileType"
+    REPLY = "Reply"
     SEQUENCE = "Sequence"
     SHOT = "Shot"
     STEP = "Step"

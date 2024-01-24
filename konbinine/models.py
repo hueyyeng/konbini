@@ -99,6 +99,50 @@ class SgGenericEntity(SgIdMixin, SgBaseModel):
 
 
 @dataclass
+class SgReply(SgIdMixin, SgBaseModel):
+    """
+
+    Strange rant here for devs. Any attachments that is uploaded by replying
+    to the Note entity will show up as the Note... attachments.
+
+    The SgReply entity only have the "entity" (that points to the parent Note) and
+    the "user" (the HumanUser that creates the reply).
+
+    Strange cat I mean reply indeed.
+
+    """
+    content: str = ""
+    user: Optional[SgHumanUser] = None
+    entity: Optional[SgGenericEntity] = None
+    publish_status: str = ""
+    type: str = SgEntity.REPLY
+
+    @classmethod
+    def from_dict(cls, dict_):
+        params = inspect.signature(cls).parameters
+
+        _map = {
+            "user": SgHumanUser,
+            "entity": SgGenericEntity,
+        }
+
+        sanitized_dict = {}
+        for k, v in dict_.items():
+            if "." in k:
+                k = k.replace(".", "__")
+
+            v = cls._get_model(k, v, _map) if k in _map else v
+            sanitized_dict[k] = v
+
+        return cls(
+            **{
+                k: v for k, v in sanitized_dict.items()
+                if k in params
+            }
+        )
+
+
+@dataclass
 class SgNote(SgIdMixin, SgBaseModel):
     subject: str = ""
     content: str = ""
@@ -108,6 +152,7 @@ class SgNote(SgIdMixin, SgBaseModel):
     addressings_to: list[SgGenericEntity] = field(default_factory=list)
     note_links: list[SgGenericEntity] = field(default_factory=list)
     attachments: list[SgGenericEntity] = field(default_factory=list)
+    replies: list[SgGenericEntity] = field(default_factory=list)
     sg_status_list: str = ""
     type: str = SgEntity.NOTE
 
@@ -122,6 +167,7 @@ class SgNote(SgIdMixin, SgBaseModel):
             "addressings_to": SgGenericEntity,
             "note_links": SgGenericEntity,
             "attachments": SgGenericEntity,
+            "replies": SgGenericEntity,
         }
 
         sanitized_dict = {}

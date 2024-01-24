@@ -18,6 +18,7 @@ from konbinine.fields import (
     HUMANUSER_FIELDS,
     NOTE_FIELDS,
     PROJECT_FIELDS,
+    REPLY_FIELDS,
     SHOT_FIELDS,
     TASK_FIELDS,
     TIMELOG_FIELDS,
@@ -31,6 +32,7 @@ from konbinine.models import (
     SgHumanUser,
     SgNote,
     SgProject,
+    SgReply,
     SgShot,
     SgTask,
     SgTimeLog,
@@ -1118,6 +1120,11 @@ class Konbini:
         if not data.id:
             raise Exception("No SgNote ID found!")
 
+        if data.sg_status_list:
+            valid_values = self.get_valid_values(SgEntity.NOTE, "sg_status_list")
+            if data.sg_status_list not in valid_values:
+                raise Exception(f"Invalid {data.sg_status_list} value! Valid values: {valid_values}")
+
         is_successful_update = True
         data_ = data.to_dict()
         data_.update(**kwargs)
@@ -1134,6 +1141,155 @@ class Konbini:
             is_successful_update = False
         except Exception as e:
             logger.error(f"Unhandled exception when updating Note {data.id}: {e}")
+            is_successful_update = False
+
+        return is_successful_update
+
+    def get_sg_replies(
+            self,
+            reply_id: Union[int, Set[int], List[int]] = None,
+            custom_fields: Optional[List[str]] = None,
+    ) -> List[SgReply]:
+        """Get SG Replies
+
+        Parameters
+        ----------
+        reply_id : int | set[int] | list[int]
+            ShotGrid Reply ID. Default None which retrieves all replies
+        custom_fields: list[str]
+            Optional. List of valid fields for SG Reply.
+
+        Returns
+        -------
+        list[SgReply]
+            List of SgReply or empty list if no results from ShotGrid
+
+        """
+        filters = []
+        if reply_id:
+            if isinstance(reply_id, int):
+                reply_id = [reply_id]
+
+            if isinstance(reply_id, set):
+                reply_id = list(reply_id)
+
+            filters = [
+                [
+                    "id",
+                    "in",
+                    reply_id
+                ]
+            ]
+
+        fields = REPLY_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        notes_: List[dict] = self.sg.find(SgEntity.REPLY, filters, fields)
+        notes = [SgReply.from_dict(t) for t in notes_]
+        return notes
+
+    def create_sg_reply(self, data: SgReply, **kwargs) -> int:
+        """Create SG Reply
+
+        Create SG Reply entity. Refer to the data structure in Examples for
+        the bare minimum key values to successfully create Reply entity.
+
+        Parameters
+        ----------
+        data : SgReply
+            The SG Reply data for create
+
+        Returns
+        -------
+        int
+            The created Reply ID if successful or 0 if failed
+
+        Examples
+        --------
+        Content: Valid string format
+            {
+                "content": "QWERTY",
+                "entity": {
+                    "id": 989,
+                    "type": "Note"
+                },
+                "user": {
+                    "id": 343,
+                    "type": "HumanUser"
+                }
+            }
+
+        """
+        if not data.content:
+            raise Exception("Content cannot be left blank!")
+
+        if not data.user or not data.user.id:
+            raise Exception("Requires explicit user!")
+
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        created_id = 0
+        try:
+            response_data = self.sg.create(SgEntity.REPLY, data_)
+            created_id = response_data["id"]
+            logger.info(f"SgReply {created_id} successfully created")
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to create SG Reply",
+                    "error": e,
+                    "data": data,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgReply {data.code}: {e}")
+
+        return created_id
+
+    def update_sg_reply(self, data: SgReply, **kwargs) -> bool:
+        """Update SG Reply
+
+        Parameters
+        ----------
+        data : SgReply
+            The SgReply data for update
+
+        Returns
+        -------
+        bool
+            True if updated successfully
+
+        """
+        if not isinstance(data, SgReply):
+            raise Exception("Data must be instance of SgReply!")
+
+        if not data.id:
+            raise Exception("No SgReply ID found!")
+
+        if not data.content:
+            raise Exception("Content cannot be left blank!")
+
+        if not data.user or not data.user.id:
+            raise Exception("Requires explicit user!")
+
+        is_successful_update = True
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        try:
+            self.sg.update(
+                entity_type=SgEntity.REPLY,
+                entity_id=data.id,
+                data=data.to_dict(),
+            )
+            logger.info(f"Update Reply {data.id} successful")
+        except shotgun_api3.ShotgunError as e:
+            logger.warning(f"Error updating Note {data.id}: {e}")
+            is_successful_update = False
+        except Exception as e:
+            logger.error(f"Unhandled exception when updating Reply {data.id}: {e}")
             is_successful_update = False
 
         return is_successful_update
