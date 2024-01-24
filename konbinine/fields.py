@@ -181,6 +181,13 @@ NOTE_FIELDS = [
     "sg_status_list",
 ]
 
+REPLY_FIELDS = [
+    "content",
+    "user",
+    "entity",
+    "publish_status",
+]
+
 BOOKING_FIELDS = [
     "user",
     "start_date",
