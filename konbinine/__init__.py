@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 __version__ = "0.3.4"
 
 import calendar
@@ -31,12 +33,18 @@ from konbinine.models import (
     SgBooking,
     SgHumanUser,
     SgNote,
+    SgNoteThread,
+    SgNoteThreadGroup,
     SgProject,
     SgReply,
     SgShot,
     SgTask,
     SgTimeLog,
     SgVersion,
+)
+from konbinine.types import (
+    TNoteThreadCustomEntityFields,
+    TNoteThreadReadData,
 )
 from konbinine.utils import SG_DATE_FORMAT
 
@@ -1099,6 +1107,105 @@ class Konbini:
         notes_ = self.sg.find(SgEntity.NOTE, filters, fields)
         notes = [SgNote.from_dict(n) for n in notes_]
         return notes
+
+    def get_sg_note_thread_contents(
+            self,
+            note_id: int,
+            custom_entity_fields: Optional[TNoteThreadCustomEntityFields] = None,
+    ) -> SgNoteThread:
+        """Get SG Note Thread Contents
+
+        Parameters
+        ----------
+        note_id : int
+            ShotGrid Note ID.
+        custom_entity_fields: TNoteThreadCustomEntityFields
+            Optional. Refer to TNoteThreadCustomEntityFields for the dict schema.
+
+        Returns
+        -------
+        SgNoteThread
+            The SgNoteThread using data from sg.note_thread_read method and structured
+            similarly to SG Web API `note/thread_contents` endpoint response.
+
+        """
+        if custom_entity_fields is None:
+            # At the very least, we want to have the actual attachment file info.
+            # file extension and thumbnail aka "image" to avoid querying SG again...
+            custom_entity_fields = {
+                "Attachment": [
+                    "this_file",
+                    "file_extension",
+                    "image",
+                ]
+            }
+
+        try:
+            response_data: list[TNoteThreadReadData] = self.sg.note_thread_read(
+                note_id=note_id,
+                entity_fields=custom_entity_fields,
+            )
+        except shotgun_api3.ShotgunError as e:
+            logger.warning(f"Error retrieving thread contents for Note {note_id}: {e}")
+            raise e
+        except Exception as e:
+            logger.error(f"Unhandled exception when retrieving thread contents for Note {note_id}: {e}")
+            raise e
+
+        # TODO: Rework this logic in the future but for now minimal happy flow
+        # Sanitize the response data first before processing the sanitized data
+        # as SgNoteThreadGroup
+        attachment_ids = []
+        reply_ids = []
+        sanitized_groups = []
+
+        current_group = []
+        for data in response_data:
+            entity_id = data['id']
+            entity_type = data["type"]
+
+            is_reply_type = entity_type == SgEntity.REPLY
+            is_attachment_type = entity_type == SgEntity.ATTACHMENT
+
+            if is_attachment_type:
+                attachment_ids.append(entity_id)
+
+            if is_reply_type:
+                reply_ids.append(entity_id)
+
+            if entity_type == SgEntity.NOTE or is_attachment_type:
+                current_group.append(data)
+            else:
+                sanitized_groups.append(current_group)
+                current_group = [data]
+        else:
+            sanitized_groups.append(current_group)
+
+        # The SgNoteThread instance
+        note_thread = SgNoteThread()
+        note_thread.note_id = note_id
+        note_thread.attachment_ids = attachment_ids
+        note_thread.reply_ids = reply_ids
+
+        # Do the processing of the sanitized data
+        for group in sanitized_groups:
+            thread_group = SgNoteThreadGroup()
+            for g in group:
+                if g["type"] in (SgEntity.NOTE, SgEntity.REPLY):
+                    thread_group.id = g["id"]
+                    thread_group.type = g["type"]
+                    # Because Autodesk can't decide if created_by or user key across
+                    # different data schemas...
+                    user_data = g.get("created_by") or g.get("user")  # Must have data or let it error
+                    thread_group.user = SgHumanUser.from_dict(user_data)
+                else:
+                    att = SgAttachment.from_dict(g)
+                    att.this_file.id = g["id"]
+                    thread_group.attachments.append(att)
+
+            note_thread.groups.append(thread_group)
+
+        return note_thread
 
     def update_sg_note(self, data: SgNote, **kwargs) -> bool:
         """Update SG Note

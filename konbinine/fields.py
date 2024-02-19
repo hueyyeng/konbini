@@ -156,6 +156,7 @@ PLAYLIST_FIELDS = [
 
 ATTACHMENT_FIELDS = [
     "this_file",
+    "created_by",
     "display_name",
     "description",
     "image",
