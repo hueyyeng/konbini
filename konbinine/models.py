@@ -105,6 +105,14 @@ class SgNoteThreadGroup(SgBaseModel):
     attachments: list[SgAttachment] = field(default_factory=list)
     user: Optional[SgHumanUser] = None
 
+    @property
+    def is_note_type(self):
+        return self.type == SgEntity.NOTE
+
+    @property
+    def is_reply_type(self):
+        return self.type == SgEntity.REPLY
+
     @classmethod
     def from_dict(cls, dict_):
         params = inspect.signature(cls).parameters
@@ -138,8 +146,39 @@ class SgNoteThread(SgBaseModel):
     groups: list[SgNoteThreadGroup] = field(default_factory=list)
 
     @property
-    def reply_count(self):
+    def reply_count(self) -> int:
         return len(self.reply_ids)
+
+    @property
+    def earliest_reply_id(self) -> int | None:
+        if not self.reply_ids:
+            return None
+
+        return min(self.reply_ids)
+
+    @property
+    def latest_reply_id(self) -> int | None:
+        if not self.reply_ids:
+            return None
+
+        return max(self.reply_ids)
+
+    # KON-10: Assume the first item in the groups is always "Note" type
+    def get_note(self) -> SgNoteThreadGroup | None:
+        if not self.groups:
+            return None
+
+        return self.groups[0]
+
+    # KON-10: Lazy to convert it to SgReply entities... as this is
+    # to get "replies" and their attachments
+    def get_replies(self) -> list[SgNoteThreadGroup]:
+        replies = [
+            group for group in self.groups
+            if not group.is_reply_type
+        ]
+
+        return replies
 
 
 @dataclass

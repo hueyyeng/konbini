@@ -1190,17 +1190,17 @@ class Konbini:
         # Do the processing of the sanitized data
         for group in sanitized_groups:
             thread_group = SgNoteThreadGroup()
-            for g in group:
-                if g["type"] in (SgEntity.NOTE, SgEntity.REPLY):
-                    thread_group.id = g["id"]
-                    thread_group.type = g["type"]
+            for entity in group:
+                if entity["type"] in (SgEntity.NOTE, SgEntity.REPLY):
+                    thread_group.id = entity["id"]
+                    thread_group.type = entity["type"]
                     # Because Autodesk can't decide if created_by or user key across
                     # different data schemas...
-                    user_data = g.get("created_by") or g.get("user")  # Must have data or let it error
+                    user_data = entity.get("created_by") or entity.get("user")  # Must have data or let it error
                     thread_group.user = SgHumanUser.from_dict(user_data)
                 else:
-                    att = SgAttachment.from_dict(g)
-                    att.this_file.id = g["id"]
+                    att = SgAttachment.from_dict(entity)
+                    att.this_file.id = entity["id"]
                     thread_group.attachments.append(att)
 
             note_thread.groups.append(thread_group)
