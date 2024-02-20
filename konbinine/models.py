@@ -99,6 +99,89 @@ class SgGenericEntity(SgIdMixin, SgBaseModel):
 
 
 @dataclass
+class SgNoteThreadGroup(SgBaseModel):
+    id: int = 0
+    type: str = ""
+    attachments: list[SgAttachment] = field(default_factory=list)
+    user: Optional[SgHumanUser] = None
+
+    @property
+    def is_note_type(self):
+        return self.type == SgEntity.NOTE
+
+    @property
+    def is_reply_type(self):
+        return self.type == SgEntity.REPLY
+
+    @classmethod
+    def from_dict(cls, dict_):
+        params = inspect.signature(cls).parameters
+
+        _map = {
+            "attachments": SgGenericEntity,
+            "user": SgHumanUser,
+        }
+
+        sanitized_dict = {}
+        for k, v in dict_.items():
+            if "." in k:
+                k = k.replace(".", "__")
+
+            v = cls._get_model(k, v, _map) if k in _map else v
+            sanitized_dict[k] = v
+
+        return cls(
+            **{
+                k: v for k, v in sanitized_dict.items()
+                if k in params
+            }
+        )
+
+
+@dataclass
+class SgNoteThread(SgBaseModel):
+    note_id: int = 0
+    attachment_ids: list[int] = field(default_factory=list)
+    reply_ids: list[int] = field(default_factory=list)
+    groups: list[SgNoteThreadGroup] = field(default_factory=list)
+
+    @property
+    def reply_count(self) -> int:
+        return len(self.reply_ids)
+
+    @property
+    def earliest_reply_id(self) -> int | None:
+        if not self.reply_ids:
+            return None
+
+        return min(self.reply_ids)
+
+    @property
+    def latest_reply_id(self) -> int | None:
+        if not self.reply_ids:
+            return None
+
+        return max(self.reply_ids)
+
+    # KON-10: Assume the first item in the groups is always "Note" type
+    def get_note(self) -> SgNoteThreadGroup | None:
+        if not self.groups:
+            return None
+
+        return self.groups[0]
+
+    # KON-10: Lazy to convert it to SgReply entities... as this is
+    # to get "replies" and their attachments
+    def get_replies(self) -> list[SgNoteThreadGroup]:
+        replies = [
+            group for group in self.groups
+            if not group.is_reply_type
+        ]
+
+        return replies
+
+
+@dataclass
 class SgReply(SgIdMixin, SgBaseModel):
     """
 
@@ -715,6 +798,7 @@ class SgAttachment(SgBaseModel):
     # NOTE: There is no ID attribute on Attachment entity, but it is stored
     #  in 'this_file' attribute where you can find the file at 'Files' page on SG
     this_file: Optional[SgAttachmentFile] = None
+    created_by: Optional[SgHumanUser] = None
     display_name: str = ""  # filename
     description: Optional[str] = None
     image: Optional[str] = None
@@ -733,6 +817,7 @@ class SgAttachment(SgBaseModel):
 
         _map = {
             "this_file": SgAttachmentFile,
+            "created_by": SgHumanUser,
         }
 
         sanitized_dict = {}
