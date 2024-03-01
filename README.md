@@ -1,5 +1,7 @@
 # konbini
 
+[![PyPI version](https://badge.fury.io/py/konbinine.svg)](https://badge.fury.io/py/konbinine)
+
 おまえはもうショットいる。なに？！
 
 Opinionated wrapper for Autodesk Shotgun I mean [ShotGrid Python API](https://github.com/shotgunsoftware/python-api)
@@ -61,6 +63,11 @@ created is to improve the Developer Experience (DX) when interacting with ShotGr
 pip install -r requirements.txt
 ```
 
+## Documentation
+
+For now, refer to the docstring in the source code. Generally this is not meant to outright replace `shotgun_api3` and
+there is some attributes that are intentionally missing as I don't use it (or yet to use it).
+
 ## Extending konbinine
 
 Coming soon!
@@ -68,4 +75,3 @@ Coming soon!
 ## TODO
 
 1. Implement `Sequence` dataclass
-2. Handle Image/Movie upload gracefully (currently for Project entity only)
