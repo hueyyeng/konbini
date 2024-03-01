@@ -321,7 +321,19 @@ class SgProject(SgIdMixin, SgBaseModel):
 class _SgPipelineStep(SgBaseModel):
     code: str = ""  # The nice name (e.g. Model)
     short_name: str = ""  # Self-explanatory (e.g. MOD)
+    color: str = "0,0,0"  # E.g. '253,254,152'
+    description: str = ""
+    list_order: int = 0
+    entity_type: str = ""  # ...Grouping? E.g. "Asset", "Level"
     type: str = SgEntity.STEP
+
+    def set_color(self, r: int, g: int, b: int):
+        rgb = (r, g, b)
+        for channel in rgb:
+            if not (0 <= channel <= 255):
+                raise ValueError("Value must be within 0 to 255 range.")
+
+        self.color = f"{r},{g},{b}"
 
 
 @dataclass

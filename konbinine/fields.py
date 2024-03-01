@@ -42,6 +42,15 @@ PROJECT_FIELDS = [
     "users",
 ]
 
+PIPELINE_STEP_FIELDS = [
+    "code",
+    "short_name",
+    "description",
+    "color",
+    "list_order",
+    "entity_type",
+]
+
 TASK_FIELDS = [
     "name",
     "short_name",
