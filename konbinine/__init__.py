@@ -19,6 +19,7 @@ from konbinine.fields import (
     BOOKING_FIELDS,
     HUMANUSER_FIELDS,
     NOTE_FIELDS,
+    PIPELINE_STEP_FIELDS,
     PROJECT_FIELDS,
     REPLY_FIELDS,
     SHOT_FIELDS,
@@ -35,6 +36,7 @@ from konbinine.models import (
     SgNote,
     SgNoteThread,
     SgNoteThreadGroup,
+    SgPipelineStep,
     SgProject,
     SgReply,
     SgShot,
@@ -312,6 +314,141 @@ class Konbini:
             logger.error(f"Error updating SgProject {data.id}: {e}")
         except Exception as e:
             logger.error(f"Unhandled exception when updating SgProject {data.id}: {e}")
+
+        return is_updated
+
+    def get_sg_pipeline_steps(
+            self,
+            step_id: Union[int, Set[int], List[int]] = None,
+            custom_fields: Optional[List[str]] = None,
+    ) -> List[SgPipelineStep]:
+        """Get SG Pipeline Steps (aka Step entity)
+
+        Parameters
+        ----------
+        step_id : int | set[int] | list[int]
+            ShotGrid Pipeline Step ID. Default None which retrieve all Pipeline Steps
+        custom_fields: list[str]
+            List of custom fields
+
+        Returns
+        -------
+        list[SgPipelineStep]
+            List of SgPipelineStep or empty list if no results from ShotGrid
+
+        """
+        filters = []
+        if step_id:
+            if isinstance(step_id, int):
+                step_id = [step_id]
+
+            if isinstance(step_id, set):
+                step_id = list(step_id)
+
+            filters = [
+                [
+                    "id",
+                    "in",
+                    step_id
+                ]
+            ]
+
+        fields = PIPELINE_STEP_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        steps_: List[dict] = self.sg.find(SgEntity.STEP, filters, fields)
+        steps = [SgPipelineStep.from_dict(_) for _ in steps_]
+        return steps
+
+    def create_sg_pipeline_step(self, data: SgPipelineStep, **kwargs) -> int:
+        """Create SG Pipeline Step
+
+        Create SG Pipeline Step entity. Refer to the data structure in Examples for
+        the bare minimum key values to successfully create a Pipeline Step entity.
+
+        Parameters
+        ----------
+        data : SgPipelineStep
+            The SgPipelineStep data for create
+
+        Returns
+        -------
+        int
+            The created Pipeline Step ID if successful or 0 if failed
+
+        """
+        if not isinstance(data, SgPipelineStep):
+            raise Exception("Data must be instance of SgPipelineStep!")
+
+        create_data = {
+            "code": data.code,
+            "short_name": data.short_name,
+            "description": data.description,
+            "color": data.color,
+            "list_order": data.list_order,
+            "entity_type": data.entity_type,
+        }
+
+        create_data.update(**kwargs)
+
+        created_id = 0
+        try:
+            response_data = self.sg.create(
+                entity_type=SgEntity.STEP,
+                data=create_data,
+            )
+            created_id = response_data["id"]
+            logger.info(f"SgPipelineStep {created_id} successfully created")
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError, KeyError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to create SG Pipeline Step",
+                    "error": e,
+                    "data": data,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgPipelineStep {data.code}: {e}")
+
+        return created_id
+
+    def update_sg_pipeline_step(self, data: SgPipelineStep, **kwargs) -> bool:
+        """Update SG Pipeline Step
+
+        Parameters
+        ----------
+        data : SgPipelineStep
+            The SgPipelineStep data for update
+
+        Returns
+        -------
+        bool
+            True if update successfully
+
+        """
+        if not isinstance(data, SgPipelineStep):
+            raise Exception("Data must be instance of SgPipelineStep!")
+
+        if not data.id:
+            raise Exception("No SgPipelineStep ID found!")
+
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        is_updated = False
+        try:
+            self.sg.update(
+                entity_type=SgEntity.STEP,
+                entity_id=data.id,
+                data=data_,
+            )
+            is_updated = True
+            logger.info(f"Update SgPipelineStep {data.id} successful")
+        except shotgun_api3.ShotgunError as e:
+            logger.error(f"Error updating SgPipelineStep {data.id}: {e}")
+        except Exception as e:
+            logger.error(f"Unhandled exception when updating SgPipelineStep {data.id}: {e}")
 
         return is_updated
 
