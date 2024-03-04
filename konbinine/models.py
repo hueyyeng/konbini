@@ -322,7 +322,7 @@ class _SgPipelineStep(SgBaseModel):
     code: str = ""  # The nice name (e.g. Model)
     short_name: str = ""  # Self-explanatory (e.g. MOD)
     color: str = "0,0,0"  # E.g. '253,254,152'
-    description: str = ""
+    description: Optional[str] = None
     list_order: int = 0
     entity_type: str = ""  # ...Grouping? E.g. "Asset", "Level"
     type: str = SgEntity.STEP
@@ -541,6 +541,7 @@ class SgTask(SgIdMixin, _SgTask):
 @dataclass
 class _SgAsset(SgBaseModel):
     code: str = ""  # Shot Code
+    description: Optional[str] = None
     tasks: List[SgTask] = field(default_factory=list)
     notes: list[SgGenericEntity] = field(default_factory=list)
     open_notes: list[SgGenericEntity] = field(default_factory=list)
@@ -590,7 +591,7 @@ class SgAsset(SgIdMixin, _SgAsset):
 @dataclass
 class _SgPlaylist(SgBaseModel):
     code: str = ""  # Playlist name
-    description: str = ""
+    description: Optional[str] = None
     locked: bool = False
     locked_by: Optional[SgHumanUser] = None
     project: Optional[SgProject] = None
@@ -748,7 +749,7 @@ class SgBooking(SgIdMixin, _SgBooking):
 @dataclass
 class _SgTimeLog(SgBaseModel):
     date: str = ""
-    description: str = ""
+    description: Optional[str] = None
     duration: float = 0.0
     entity: Optional[SgGenericEntity] = None
     project: Optional[SgProject] = None
