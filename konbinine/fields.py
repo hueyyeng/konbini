@@ -55,6 +55,7 @@ TASK_FIELDS = [
     "name",
     "short_name",
     "content",
+    "sg_description",
     "duration",
     "milestone",
     "est_in_mins",

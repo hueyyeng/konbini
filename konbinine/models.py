@@ -479,6 +479,7 @@ class _SgTask(SgBaseModel):
     name: str = ""
     short_name: str = ""
     content: str = ""
+    sg_description: str = ""
     duration: int = 0
     milestone: bool = False
     est_in_mins: Optional[int] = None  # Bid on SG Web
