@@ -848,3 +848,54 @@ class SgAttachment(SgBaseModel):
                 if k in params
             }
         )
+
+
+@dataclass
+class _SgPhase(SgBaseModel):
+    code: str = ""
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    milestone: bool = False
+    color: str = "0,0,0"  # E.g. '253,254,152'
+    description: Optional[str] = None
+    type: str = SgEntity.PHASE
+    project: Optional[SgProject] = None
+    open_notes: List[SgGenericEntity] = field(default_factory=list)
+    created_at: Optional[datetime.datetime] = None  # Example 2024-08-08T09:10:14Z
+    updated_at: Optional[datetime.datetime] = None  # Example 2023-08-07T06:29:35Z
+
+    def set_color(self, r: int, g: int, b: int):
+        rgb = (r, g, b)
+        for channel in rgb:
+            if not (0 <= channel <= 255):
+                raise ValueError("Value must be within 0 to 255 range.")
+
+        self.color = f"{r},{g},{b}"
+
+    def __post_init__(self):
+        is_null_start_date = self.start_date is None
+        is_null_end_date = self.end_date is None
+
+        if is_null_start_date and is_null_end_date:
+            return
+
+        valid_start_date = False
+        valid_end_date = False
+        if is_null_start_date:
+            valid_start_date = validate_sg_date_format(self.start_date)
+        if not is_null_end_date:
+            valid_end_date = validate_sg_date_format(self.end_date)
+
+        if not valid_start_date:
+            raise InvalidSgDateFormatException("Start Date format must be YYYY-MM-DD")
+
+        if not valid_start_date and not valid_end_date:
+            raise InvalidSgDateFormatException("Start and End Date format must be YYYY-MM-DD")
+
+        if not valid_end_date:
+            raise InvalidSgDateFormatException("End Date format must be YYYY-MM-DD")
+
+
+@dataclass
+class SgPhase(SgIdMixin, _SgPhase):
+    pass

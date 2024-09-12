@@ -218,3 +218,15 @@ TIMELOG_FIELDS = [
     "project",
     "user",
 ]
+
+PHASE_FIELDS = [
+    "code",
+    "start_date",
+    "due_date",
+    "milestone",
+    "color",
+    "description",
+    "project",
+    "created_at",
+    "updated_at",
+]

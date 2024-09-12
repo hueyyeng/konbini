@@ -35,6 +35,7 @@ class SgEntity:
     MOCAPTAKERANGE = "MocapTakeRange"
     NOTE = "Note"
     PERFORMER = "Performer"
+    PHASE = "Phase"
     PLAYLIST = "Playlist"
     PROJECT = "Project"
     PUBLISHEDFILE = "PublishedFile"
