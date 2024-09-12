@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-__version__ = "0.3.8"
+__version__ = "0.3.9"
 
 import calendar
 import datetime
 import logging
 import os
-from typing import List, Optional, Set, Tuple, Union
+from typing import List, Optional, Set, Union
 
 import shotgun_api3
 from urllib3.exceptions import ProtocolError
