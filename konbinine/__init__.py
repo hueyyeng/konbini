@@ -1585,6 +1585,47 @@ class Konbini:
         assets = [SgAsset.from_dict(t) for t in assets_]
         return assets
 
+    def get_sg_assets_by_project(
+        self,
+        project_id: int,
+        custom_fields: Optional[List[str]] = None,
+    ) -> List[SgAsset]:
+        """Get SG Assets by Project
+
+        Parameters
+        ----------
+        project_id : int
+            ShotGrid Project ID.
+        custom_fields: list[str]
+            List of custom fields
+
+        Returns
+        -------
+        list[SgAsset]
+            List of SgAsset or empty list if no results from ShotGrid
+
+        """
+        filters = [
+            [
+                "project",
+                "is",
+                [
+                    {
+                        "id": project_id,
+                        "type": SgEntity.PROJECT,
+                    }
+                ]
+            ]
+        ]
+        fields = ASSET_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        # If content is 'Idle', the entity value will be None
+        assets_: List[dict] = self.sg.find(SgEntity.ASSET, filters, fields)
+        assets = [SgAsset.from_dict(t) for t in assets_]
+        return assets
+
     def create_sg_asset(self, data: SgAsset, **kwargs) -> int:
         """Create SG Asset
 

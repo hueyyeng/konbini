@@ -29,6 +29,21 @@ class SgBaseModel:
     _extra_fields: dict = field(default_factory=dict)
 
     @staticmethod
+    def _include_extra_fields(dict_: dict, include: bool):
+        extra_fields = dict_.pop("_extra_fields", {})
+        if include:
+            dict_.update(extra_fields)
+
+    @staticmethod
+    def _process_extra_fields(src_dict: dict, sanitized_dict: dict, params):
+        _extra_fields = {}
+        for k, v in src_dict.items():
+            if k not in params:
+                _extra_fields[k] = v
+
+        sanitized_dict["_extra_fields"] = _extra_fields
+
+    @staticmethod
     def _get_model(
         field_name: str,
         value: None | dict | list[dict],
@@ -51,9 +66,7 @@ class SgBaseModel:
         }
         dict_.pop("id", None)
         dict_.pop("type", None)
-        extra_fields = dict_.pop("_extra_fields", {})
-        if include_extra_fields:
-            dict_.update(extra_fields)
+        self._include_extra_fields(dict_, include_extra_fields)
 
         return dict_
 
@@ -61,9 +74,7 @@ class SgBaseModel:
         dict_ = {
             k: v for k, v in asdict(self).items() if v
         }
-        extra_fields = dict_.pop("_extra_fields", {})
-        if include_extra_fields:
-            dict_.update(extra_fields)
+        self._include_extra_fields(dict_, include_extra_fields)
 
         return dict_
 
@@ -77,12 +88,7 @@ class SgBaseModel:
                 k = k.replace(".", "__")
             sanitized_dict[k] = v
 
-        _extra_fields = {}
-        for k, v in dict_.items():
-            if k not in params:
-                _extra_fields[k] = v
-
-        sanitized_dict["_extra_fields"] = _extra_fields
+        cls._process_extra_fields(dict_, sanitized_dict, params)
 
         return cls(
             **{
@@ -129,6 +135,8 @@ class SgNoteThreadGroup(SgBaseModel):
 
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
+
+        cls._process_extra_fields(dict_, sanitized_dict, params)
 
         return cls(
             **{
@@ -217,6 +225,8 @@ class SgReply(SgIdMixin, SgBaseModel):
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
+        cls._process_extra_fields(dict_, sanitized_dict, params)
+
         return cls(
             **{
                 k: v for k, v in sanitized_dict.items()
@@ -261,6 +271,8 @@ class SgNote(SgIdMixin, SgBaseModel):
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
+        cls._process_extra_fields(dict_, sanitized_dict, params)
+
         return cls(
             **{
                 k: v for k, v in sanitized_dict.items()
@@ -304,6 +316,8 @@ class SgProject(SgIdMixin, SgBaseModel):
 
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
+
+        cls._process_extra_fields(dict_, sanitized_dict, params)
 
         return cls(
             **{
@@ -394,6 +408,8 @@ class _SgVersion(SgBaseModel):
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
+        cls._process_extra_fields(dict_, sanitized_dict, params)
+
         return cls(
             **{
                 k: v for k, v in sanitized_dict.items()
@@ -461,6 +477,8 @@ class _SgShot(SgBaseModel):
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
+        cls._process_extra_fields(dict_, sanitized_dict, params)
+
         return cls(
             **{
                 k: v for k, v in sanitized_dict.items()
@@ -526,6 +544,8 @@ class _SgTask(SgBaseModel):
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
+        cls._process_extra_fields(dict_, sanitized_dict, params)
+
         return cls(
             **{
                 k: v for k, v in sanitized_dict.items()
@@ -576,6 +596,8 @@ class _SgAsset(SgBaseModel):
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
+        cls._process_extra_fields(dict_, sanitized_dict, params)
+
         return cls(
             **{
                 k: v for k, v in sanitized_dict.items()
@@ -623,6 +645,8 @@ class _SgPlaylist(SgBaseModel):
 
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
+
+        cls._process_extra_fields(dict_, sanitized_dict, params)
 
         return cls(
             **{
@@ -676,6 +700,8 @@ class _SgHumanUser(SgBaseModel):
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
+        cls._process_extra_fields(dict_, sanitized_dict, params)
+
         return cls(
             **{
                 k: v for k, v in sanitized_dict.items()
@@ -727,6 +753,8 @@ class _SgBooking(SgBaseModel):
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
 
+        cls._process_extra_fields(dict_, sanitized_dict, params)
+
         return cls(
             **{
                 k: v for k, v in sanitized_dict.items()
@@ -774,6 +802,8 @@ class _SgTimeLog(SgBaseModel):
 
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
+
+        cls._process_extra_fields(dict_, sanitized_dict, params)
 
         return cls(
             **{
@@ -841,6 +871,8 @@ class SgAttachment(SgBaseModel):
 
             v = cls._get_model(k, v, _map) if k in _map else v
             sanitized_dict[k] = v
+
+        cls._process_extra_fields(dict_, sanitized_dict, params)
 
         return cls(
             **{
