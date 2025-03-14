@@ -4,7 +4,8 @@
 
 おまえはもうショットいる。なに？！
 
-Opinionated wrapper for Autodesk Shotgun I mean [ShotGrid Python API](https://github.com/shotgunsoftware/python-api)
+Opinionated wrapper for Autodesk ~~~Shotgun~~~ ~~~ShotGrid~~~ I
+mean [Flow Production Tracking Python API](https://github.com/shotgunsoftware/python-api)
 because the API usage requirements is 便利じゃないでしょう？
 
 > コンビニね～ As there is an existing PyPI project using **_konbini_** name, this repo project name
@@ -71,7 +72,3 @@ there is some attributes that are intentionally missing as I don't use it (or ye
 ## Extending konbinine
 
 Coming soon!
-
-## TODO
-
-1. Implement `Sequence` dataclass

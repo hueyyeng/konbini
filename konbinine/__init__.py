@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-__version__ = "0.3.8"
+__version__ = "0.3.10"
 
 import calendar
 import datetime
 import logging
 import os
-from typing import List, Optional, Set, Tuple, Union
+from typing import List, Optional, Set, Union
 
 import shotgun_api3
 from urllib3.exceptions import ProtocolError
@@ -19,6 +19,7 @@ from konbinine.fields import (
     BOOKING_FIELDS,
     HUMANUSER_FIELDS,
     NOTE_FIELDS,
+    PHASE_FIELDS,
     PIPELINE_STEP_FIELDS,
     PROJECT_FIELDS,
     REPLY_FIELDS,
@@ -36,6 +37,7 @@ from konbinine.models import (
     SgNote,
     SgNoteThread,
     SgNoteThreadGroup,
+    SgPhase,
     SgPipelineStep,
     SgProject,
     SgReply,
@@ -1583,6 +1585,47 @@ class Konbini:
         assets = [SgAsset.from_dict(t) for t in assets_]
         return assets
 
+    def get_sg_assets_by_project(
+        self,
+        project_id: int,
+        custom_fields: Optional[List[str]] = None,
+    ) -> List[SgAsset]:
+        """Get SG Assets by Project
+
+        Parameters
+        ----------
+        project_id : int
+            ShotGrid Project ID.
+        custom_fields: list[str]
+            List of custom fields
+
+        Returns
+        -------
+        list[SgAsset]
+            List of SgAsset or empty list if no results from ShotGrid
+
+        """
+        filters = [
+            [
+                "project",
+                "is",
+                [
+                    {
+                        "id": project_id,
+                        "type": SgEntity.PROJECT,
+                    }
+                ]
+            ]
+        ]
+        fields = ASSET_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        # If content is 'Idle', the entity value will be None
+        assets_: List[dict] = self.sg.find(SgEntity.ASSET, filters, fields)
+        assets = [SgAsset.from_dict(t) for t in assets_]
+        return assets
+
     def create_sg_asset(self, data: SgAsset, **kwargs) -> int:
         """Create SG Asset
 
@@ -2202,6 +2245,139 @@ class Konbini:
             is_successful_update = False
 
         return is_successful_update
+
+    def get_sg_phases(
+        self,
+        phase_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
+    ) -> List[SgPhase]:
+        """Get SG Phases
+
+        Parameters
+        ----------
+        phase_id : int | set[int] | list[int]
+            ShotGrid Phase ID. Default None which retrieve all Phases
+        custom_fields: list[str]
+            List of custom fields
+
+        Returns
+        -------
+        list[SgPhase]
+            List of SgPhase or empty list if no results from ShotGrid
+
+        """
+        filters = []
+        if phase_id:
+            if isinstance(phase_id, int):
+                phase_id = [phase_id]
+
+            if isinstance(phase_id, set):
+                phase_id = list(phase_id)
+
+            filters = [
+                [
+                    "id",
+                    "in",
+                    phase_id
+                ]
+            ]
+
+        fields = PHASE_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        # If content is 'Idle', the entity value will be None
+        phases_: List[dict] = self.sg.find(SgEntity.PHASE, filters, fields)
+        phases = [SgPhase.from_dict(t) for t in phases_]
+        return phases
+
+    def create_sg_phase(self, data: SgPhase, **kwargs) -> int:
+        """Create SG Phase
+
+        Create SG Phase entity. Refer to the data structure in Examples for
+        the bare minimum key values to successfully create Phase entity.
+
+        Parameters
+        ----------
+        data : SgPhase
+            The SG Phase data for create
+
+        Returns
+        -------
+        int
+            The created Phase ID if successful or 0 if failed
+
+        Examples
+        --------
+        Content: Valid string format
+            {
+                "project": {
+                    "id": 551,
+                    "type": "Project"
+                },
+                "code": "New Year 2025",
+                "start_date": "2025-01-01",
+                "end_date": "2025-01-01",
+            }
+
+        """
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        created_id = 0
+        try:
+            response_data = self.sg.create(SgEntity.PHASE, data_)
+            created_id = response_data["id"]
+            logger.info(f"SgPhase {created_id} successfully created")
+        except (shotgun_api3.Fault, shotgun_api3.ShotgunError) as e:
+            logger.error(
+                {
+                    "msg": "Fail to create SG Phase",
+                    "error": e,
+                    "data": data,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Unhandled exception when creating SgPhase {data.code}: {e}")
+
+        return created_id
+
+    def update_sg_phase(self, data: SgPhase, **kwargs) -> bool:
+        """Update SG Phase
+
+        Parameters
+        ----------
+        data : SgPhase
+            The SgPhase data for update
+
+        Returns
+        -------
+        bool
+            True if update successfully
+
+        """
+        if not isinstance(data, SgPhase):
+            raise Exception("Data must be instance of SgPhase!")
+
+        if not data.id:
+            raise Exception("No SgPhase ID found!")
+
+        is_updated = True
+        data_ = data.to_dict()
+        data_.update(**kwargs)
+
+        try:
+            self.sg.update(
+                entity_type=SgEntity.PHASE,
+                entity_id=data.id,
+                data=data_,
+            )
+            logger.info(f"Update Phase {data.id} successful")
+        except shotgun_api3.ShotgunError as e:
+            logger.error(f"Error updating Phase {data.id}: {e}")
+            is_updated = False
+
+        return is_updated
 
     def get_sg_timelogs(
             self,

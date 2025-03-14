@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TypedDict, Literal
+from typing import Literal, TypedDict
 
 
 class TSgUploadedMovie(TypedDict):
