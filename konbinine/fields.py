@@ -6,6 +6,20 @@ fields. The models are set up with the default fields in mind.
 
 """
 
+DEPARTMENT_FIELDS = [
+    "name",
+    "code",
+    "department_type",
+    "color",
+    "list_order",
+    "sg_status_list",
+    "type",
+    "image",
+    "users",
+    "created_by",
+    "updated_by",
+]
+
 HUMANUSER_FIELDS = [
     "login",
     "name",

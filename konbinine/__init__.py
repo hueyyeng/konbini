@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__version__ = "0.3.10"
+__version__ = "0.3.11"
 
 import calendar
 import datetime
@@ -17,6 +17,7 @@ from konbinine.fields import (
     ASSET_FIELDS,
     ATTACHMENT_FIELDS,
     BOOKING_FIELDS,
+    DEPARTMENT_FIELDS,
     HUMANUSER_FIELDS,
     NOTE_FIELDS,
     PHASE_FIELDS,
@@ -33,6 +34,7 @@ from konbinine.models import (
     SgAsset,
     SgAttachment,
     SgBooking,
+    SgDepartment,
     SgHumanUser,
     SgNote,
     SgNoteThread,
@@ -84,7 +86,7 @@ class Konbini:
 
         if not api_key:
             raise MissingValueError("api_key")
-        
+
         # Override shotgun NO_SSL_VALIDATION value
         shotgun_api3.shotgun.NO_SSL_VALIDATION = self.NO_SSL_VALIDATION
 
@@ -158,10 +160,55 @@ class Konbini:
 
         return valid_values
 
+    def get_sg_departments(
+        self,
+        dept_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
+    ) -> List[SgDepartment]:
+        """Get SG Departments
+
+        Parameters
+        ----------
+        dept_id : int | set[int] | list[int]
+            ShotGrid Department ID. Default None which retrieve all Departments
+        custom_fields: list[str]
+            List of custom fields
+
+        Returns
+        -------
+        list[SgDepartment]
+            List of SgDepartment or empty list if no results from ShotGrid
+
+        """
+        filters = []
+        if dept_id:
+            if isinstance(dept_id, int):
+                dept_id = [dept_id]
+
+            if isinstance(dept_id, set):
+                dept_id = list(dept_id)
+
+            filters = [
+                [
+                    "id",
+                    "in",
+                    dept_id
+                ]
+            ]
+
+        fields = DEPARTMENT_FIELDS
+        if custom_fields:
+            fields = custom_fields
+
+        # If content is 'Idle', the entity value will be None
+        depts_: List[dict] = self.sg.find(SgEntity.DEPARTMENT, filters, fields)
+        depts = [SgDepartment.from_dict(t) for t in depts_]
+        return depts
+
     def get_sg_projects(
-            self,
-            project_id: Union[int, Set[int], List[int]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        project_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgProject]:
         """Get SG Projects
 
@@ -320,9 +367,9 @@ class Konbini:
         return is_updated
 
     def get_sg_pipeline_steps(
-            self,
-            step_id: Union[int, Set[int], List[int]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        step_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgPipelineStep]:
         """Get SG Pipeline Steps (aka Step entity)
 
@@ -455,9 +502,9 @@ class Konbini:
         return is_updated
 
     def get_sg_humanusers(
-            self,
-            humanuser_id: Optional[Union[int, Set[int], List[int]]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        humanuser_id: Optional[Union[int, Set[int], List[int]]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgHumanUser]:
         """Get SG HumanUsers
 
@@ -499,8 +546,8 @@ class Konbini:
         return users
 
     def get_active_sg_humanusers(
-            self,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgHumanUser]:
         """Get Active SG HumanUsers
 
@@ -683,9 +730,9 @@ class Konbini:
         return bookings
 
     def get_sg_bookings_by_user(
-            self,
-            humanuser_id: Union[int, Set[int], List[int]],
-            custom_fields: Optional[List[str]] = None,
+        self,
+        humanuser_id: Union[int, Set[int], List[int]],
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgBooking]:
         """Get SG Bookings
 
@@ -729,10 +776,10 @@ class Konbini:
         return bookings
 
     def get_sg_bookings_by_year(
-            self,
-            year: int,
-            humanuser_id: Optional[int | Set[int] | List[int]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        year: int,
+        humanuser_id: Optional[int | Set[int] | List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgBooking]:
         """Get SG Bookings by Year
         
@@ -800,11 +847,11 @@ class Konbini:
         return bookings
 
     def get_sg_bookings_by_month_year(
-            self,
-            month: int,
-            year: int,
-            humanuser_id: Optional[Union[int, Set[int], List[int]]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        month: int,
+        year: int,
+        humanuser_id: Optional[Union[int, Set[int], List[int]]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgBooking]:
         """Get SG Bookings by Month Year
 
@@ -1140,9 +1187,9 @@ class Konbini:
         return created_id
 
     def get_sg_notes(
-            self,
-            note_id: Union[int, Set[int], List[int]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        note_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgNote]:
         """Get SG Notes
 
@@ -1248,9 +1295,9 @@ class Konbini:
         return notes
 
     def get_sg_note_thread_contents(
-            self,
-            note_id: int,
-            custom_entity_fields: Optional[TNoteThreadCustomEntityFields] = None,
+        self,
+        note_id: int,
+        custom_entity_fields: Optional[TNoteThreadCustomEntityFields] = None,
     ) -> SgNoteThread:
         """Get SG Note Thread Contents
 
@@ -1392,9 +1439,9 @@ class Konbini:
         return is_successful_update
 
     def get_sg_replies(
-            self,
-            reply_id: Union[int, Set[int], List[int]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        reply_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgReply]:
         """Get SG Replies
 
@@ -1541,9 +1588,9 @@ class Konbini:
         return is_successful_update
 
     def get_sg_assets(
-            self,
-            asset_id: Union[int, Set[int], List[int]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        asset_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgAsset]:
         """Get SG Assets
 
@@ -1723,9 +1770,9 @@ class Konbini:
         return is_updated
 
     def get_sg_shots(
-            self,
-            shot_id: Union[int, Set[int], List[int]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        shot_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgShot]:
         """Get SG Shots
 
@@ -1767,9 +1814,9 @@ class Konbini:
         return shots
 
     def get_sg_shots_by_project(
-            self,
-            project_id: int,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        project_id: int,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgShot]:
         """Get SG Shots
         
@@ -1902,9 +1949,9 @@ class Konbini:
         return is_updated
 
     def get_sg_tasks(
-            self,
-            task_id: Union[int, Set[int], List[int]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        task_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgTask]:
         """Get SG Tasks
 
@@ -2053,9 +2100,9 @@ class Konbini:
         return is_updated
 
     def bulk_update_sg_task_status(
-            self,
-            task_id: List[int],
-            status: str,
+        self,
+        task_id: List[int],
+        status: str,
     ) -> bool:
         """Bulk Update SG Task Status
 
@@ -2105,9 +2152,9 @@ class Konbini:
         return is_bulk_updated
 
     def get_sg_versions(
-            self,
-            version_id: Union[int, Set[int], List[int]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        version_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgVersion]:
         """Get SG Versions
 
@@ -2380,9 +2427,9 @@ class Konbini:
         return is_updated
 
     def get_sg_timelogs(
-            self,
-            timelog_id: Union[int, Set[int], List[int]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        timelog_id: Union[int, Set[int], List[int]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[dict]:
         """Get SG Timelogs
 
@@ -2424,9 +2471,9 @@ class Konbini:
         return timelogs
 
     def get_sg_timelogs_by_user(
-            self,
-            humanuser_id: Union[int, Set[int], List[int]],
-            custom_fields: Optional[List[str]] = None,
+        self,
+        humanuser_id: Union[int, Set[int], List[int]],
+        custom_fields: Optional[List[str]] = None,
     ) -> List[dict]:
         """Get SG Timelogs
 
@@ -2663,9 +2710,9 @@ class Konbini:
         return is_bulk_delete_timelog_successful
 
     def get_sg_attachments(
-            self,
-            attachment_id: Optional[Union[int, Set[int], List[int]]] = None,
-            custom_fields: Optional[List[str]] = None,
+        self,
+        attachment_id: Optional[Union[int, Set[int], List[int]]] = None,
+        custom_fields: Optional[List[str]] = None,
     ) -> List[SgAttachment]:
         """Get SG Attachments
 
@@ -2707,11 +2754,11 @@ class Konbini:
         return attachments
 
     def upload_attachment(
-            self,
-            entity_id: int,
-            entity_type: str,
-            attachment_file: str,
-            **kwargs,
+        self,
+        entity_id: int,
+        entity_type: str,
+        attachment_file: str,
+        **kwargs,
     ) -> int:
         """Upload attachment
 

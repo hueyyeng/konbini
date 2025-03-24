@@ -16,6 +16,7 @@ from konbinine.utils import (
     validate_sg_date_format,
 )
 
+
 # TODO: Use Python 3.10+ kw_only but that is another headache for maintenance...
 
 
@@ -102,6 +103,57 @@ class SgBaseModel:
 class SgGenericEntity(SgIdMixin, SgBaseModel):
     name: str = ""
     type: str = ""
+
+
+@dataclass
+class SgDepartment(SgBaseModel):
+    id: int = 0
+    name: str = ""
+    code: str = ""
+    department_type: str | None = None
+    color: str = "0,0,0"  # E.g. '253,254,152'
+    list_order: int | None = 0
+    sg_status_list: str = ""
+    type: str = SgEntity.DEPARTMENT
+    image: str | None = None  # When retrieve from SG API, should be the URL path
+    users: list[SgHumanUser] = field(default_factory=list)
+    created_by: SgHumanUser | None = None
+    updated_by: SgHumanUser | None = None
+
+    def set_color(self, r: int, g: int, b: int):
+        rgb = (r, g, b)
+        for channel in rgb:
+            if not (0 <= channel <= 255):
+                raise ValueError("Value must be within 0 to 255 range.")
+
+        self.color = f"{r},{g},{b}"
+
+    @classmethod
+    def from_dict(cls, dict_):
+        params = inspect.signature(cls).parameters
+
+        _map = {
+            "users": SgHumanUser,
+            "created_by": SgHumanUser,
+            "updated_by": SgHumanUser,
+        }
+
+        sanitized_dict = {}
+        for k, v in dict_.items():
+            if "." in k:
+                k = k.replace(".", "__")
+
+            v = cls._get_model(k, v, _map) if k in _map else v
+            sanitized_dict[k] = v
+
+        cls._process_extra_fields(dict_, sanitized_dict, params)
+
+        return cls(
+            **{
+                k: v for k, v in sanitized_dict.items()
+                if k in params
+            }
+        )
 
 
 @dataclass
